@@ -77,7 +77,12 @@ def extract_wiki_links(url):
 
 @app.route('/')
 def index():
-    """メインページ"""
+    """新しいトップページ"""
+    return render_template('index.html')
+
+@app.route('/wikipedia_game') # シングルプレイヤーゲームの新しいルート
+def wikipedia_game():
+    """シングルプレイヤー Wikipedia ゲームページ"""
     return render_template('wikipedia_game.html')
 
 @app.route('/api/check-target')

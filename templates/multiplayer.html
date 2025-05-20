@@ -5,104 +5,27 @@
     <meta charset="UTF-8">
     <title>Wikipedia オンライン対戦</title>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common_styles.css') }}">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
-        
-        :root {
-            --primary-color: #6e8efb;
-            --secondary-color: #a777e3;
-            --background-color: #f5f5f5;
-            --card-bg: #ffffff;
-            --text-color: #333333;
-            --border-radius: 8px;
-            --box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            --transition-speed: 0.3s;
+        /* ユーザー名入力画面 */
+        #username-screen h2 {
+            margin-bottom: 20px; /* h2と入力欄の間のマージン調整 */
         }
-        
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
-        body {
-            font-family: 'Poppins', Arial, sans-serif;
-            background-color: var(--background-color);
-            color: var(--text-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        .card {
-            background-color: var(--card-bg);
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            padding: 20px;
-            margin-bottom: 20px;
-            width: 100%;
-            transition: all var(--transition-speed) ease;
+        #username-screen input[type="text"] {
+            margin-bottom: 15px; /* 入力欄とボタンの間のマージン調整 */
         }
 
-        .card.fade-in {
-            animation: fadeIn var(--transition-speed) ease-out;
-        }
-
-        .card.fade-out {
-            animation: fadeOut var(--transition-speed) ease-in forwards;
-        }
-        
-        .btn {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            font-weight: bold;
-            transition: all var(--transition-speed) ease;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        }
-        
-        .btn:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        input[type="text"] {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: var(--border-radius);
-            width: 100%;
-            margin-bottom: 10px;
-        }
-        
-        h1, h2, h3 {
-            margin-bottom: 15px;
-            color: var(--primary-color);
-        }
-        
-        .hidden {
-            display: none !important;
-        }
-        
         /* ロビー画面 */
         #lobby-screen {
             width: 100%;
+        }
+        #lobby-screen .card h2, #lobby-screen .card h3 {
+            margin-bottom: 15px;
+        }
+        #lobby-screen .card hr {
+            margin: 25px 0; /* 水平線のマージン調整 */
+            border: none;
+            border-top: 1px solid #eee;
         }
         
         .rooms-container {
@@ -116,39 +39,60 @@
             background-color: var(--card-bg);
             border-radius: var(--border-radius);
             box-shadow: var(--box-shadow);
-            padding: 15px;
+            padding: 20px; /* 少しパディングを増やす */
             transition: all var(--transition-speed) ease;
             cursor: pointer;
-            border: 2px solid transparent;
-            opacity: 0; /* 初期状態を透明に */
-            transform: translateY(20px); /* 初期状態を少し下に */
+            border: 1px solid #e0e0e0; /* 通常時のボーダーを薄く表示 */
+            opacity: 0;
+            transform: translateY(20px);
             animation: item-fade-in 0.5s ease forwards;
+            display: flex;
+            flex-direction: column; /* 要素を縦に並べる */
+            justify-content: space-between; /* 要素間のスペースを均等に */
+            min-height: 150px; /* カードの最小高さを設定 */
         }
 
-        @keyframes item-fade-in {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
         .room-card:hover {
-            transform: translateY(-5px);
+            transform: translateY(-3px); /* ホバー時の移動量を少し減らす */
             border-color: var(--primary-color);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12); /* ホバー時の影を少し強調 */
         }
         
         .room-card h3 {
-            margin-bottom: 10px;
+            margin-bottom: 12px; /* マージン調整 */
+            font-size: 1.25em; /* フォントサイズ調整 */
+            color: var(--primary-color);
         }
         
-        .room-card .status {
-            font-size: 0.9em;
-            color: #666;
+        .room-card .room-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto; /* 下部に配置 */
+            padding-top: 10px; /* 上の要素との間にスペース */
+            border-top: 1px solid #f0f0f0; /* 区切り線 */
+        }
+
+        .room-card .status-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .room-card .status-badge.waiting {
+            background-color: #e8f5e9; /* 薄い緑 */
+            color: #388e3c;
+        }
+        .room-card .status-badge.playing {
+            background-color: #fff3e0; /* 薄いオレンジ */
+            color: #f57c00;
         }
         
         .room-card .players {
-            margin-top: 10px;
-            font-weight: bold;
+            font-size: 0.9em;
+            color: #555;
+            font-weight: 500;
         }
         
         /* ルーム画面 */
@@ -166,10 +110,16 @@
         .player-item {
             display: flex;
             align-items: center;
-            background-color: #f0f0f0;
-            padding: 10px;
+            background-color: var(--card-bg-light); /* Slightly lighter card background */
+            padding: 12px 15px; /* Adjust padding */
             border-radius: var(--border-radius);
-            min-width: 200px;
+            min-width: 220px; /* Adjust min-width */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all var(--transition-speed) ease;
+        }
+        .player-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
         }
         
         .player-item .username {
@@ -198,11 +148,32 @@
             background-color: #2196F3;
             color: white;
         }
+
+        #target-url-setting { /* ホスト専用設定エリアのスタイル */
+            background-color: var(--card-bg-light, #f9f9f9); /* --card-bg-light が未定義の場合のフォールバック */
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-top: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        #target-url-setting h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            color: var(--primary-color);
+        }
+        #target-url-setting input[type="text"],
+        #target-url-setting select {
+            margin-bottom: 10px;
+        }
         
         .room-controls {
             display: flex;
             gap: 10px;
             margin-top: 20px;
+            flex-wrap: wrap; /* ボタンが複数行になる場合に対応 */
+            justify-content: center; /* ボタンを中央揃え */
         }
         
         /* ゲーム画面 */
@@ -216,24 +187,46 @@
         .game-header {
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             color: white;
-            padding: 15px;
+            padding: 12px 20px; /* パディング調整 */
             border-radius: var(--border-radius);
             margin-bottom: 15px;
             display: flex;
             flex-wrap: wrap;
             justify-content: space-between;
             align-items: center;
+            gap: 15px; /* ヘッダー内の要素間のギャップ */
         }
         
         .game-stats {
             display: flex;
             flex-wrap: wrap;
-            gap: 15px;
+            gap: 10px 20px; /* ギャップ調整 (行間 縦) */
+            align-items: center;
         }
         
         .game-stat {
-            font-weight: bold;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            font-weight: 600; /* Poppins semi-bold */
+            text-shadow: none; /* クリーンな見た目に */
+            font-size: 0.9em;
+        }
+        .game-stat strong { /* 目標ページ名などを強調 */
+            font-weight: 700;
+            color: #ffdd57; /* 強調色 (例: 黄色系) */
+        }
+
+        .game-header-controls { /* 回答フォームとプレイヤー表示ボタンのコンテナ */
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #answer-form input[type="text"] {
+            margin-bottom: 0; /* ヘッダー内ではマージン不要に */
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc; /* 共通スタイルに合わせるか、ここで指定 */
+        }
+        #answer-form #submit-answer-btn { /* IDで直接指定 */
+            padding: 8px 12px;
         }
         
         .game-container {
@@ -249,24 +242,33 @@
             border: none;
         }
         
-        /* プレイヤーリスト */
+        /* プレイヤーリスト (サイドバー) */
         .sidebar {
-            width: 300px;
-            background-color: var(--card-bg);
-            border-left: 1px solid #ddd;
-            padding: 15px;
+            width: 320px; /* 少し幅を広げる */
+            background-color: var(--card-bg-light, #f9f9f9); /* 他の補助的背景と合わせる */
+            border-left: 1px solid #e0e0e0;
+            padding: 20px; /* パディング調整 */
             overflow-y: auto;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.05); /* 左側に影を追加 */
+        }
+        .sidebar h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            color: var(--primary-color);
         }
         
         .player-card {
-            padding: 10px;
+            background-color: var(--card-bg);
+            padding: 12px 15px;
             border-radius: var(--border-radius);
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            transition: all var(--transition-speed) ease, background-color 0.5s ease; /* 背景色変化を滑らかに */
+            margin-bottom: 12px;
+            border: 1px solid #e0e0e0;
+            transition: all var(--transition-speed) ease, background-color 0.5s ease;
             opacity: 0;
             transform: translateX(-20px);
             animation: player-card-enter 0.5s ease forwards;
+            box-shadow: var(--box-shadow);
         }
 
         @keyframes player-card-enter {
@@ -277,22 +279,52 @@
         }
         
         .player-card .player-name {
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-weight: 600; /* Poppins semi-bold */
+            margin-bottom: 8px; /* マージン調整 */
+            font-size: 1.05em;
+            color: var(--text-color);
+        }
+        .player-card .player-name .status-text { /* (あなた) (脱落) (✓) のスタイル */
+            font-weight: normal;
+            font-size: 0.9em;
+            color: #777;
         }
         
-        .player-card .player-moves {
-            font-size: 0.9em;
+        .player-card .player-info-item { /* 移動回数や現在のページなどの情報アイテム */
+            font-size: 0.85em;
+            color: #555;
+            margin-bottom: 4px;
+        }
+        .player-card .player-info-item:last-child {
+            margin-bottom: 0;
+        }
+        .player-card .player-info-item strong { /* ラベル部分 (例: "移動回数:") */
+            font-weight: 600;
+            color: #333;
         }
         
         .player-card.finished {
-            background-color: #e8f5e9;
-            border-color: #4CAF50;
+            background-color: #e6ffed; /* より明るい緑 */
+            border-color: #5cb85c; /* 少し濃い緑のボーダー */
+        }
+        .player-card.finished .player-name {
+            color: #1e7e34; /* ゴールしたプレイヤーの名前の色 */
         }
         
         .player-card.current-player {
             border-color: var(--primary-color);
-            background-color: #e3f2fd;
+            background-color: #e9efff; /* より明るい青 */
+            box-shadow: 0 0 8px rgba(var(--primary-color-rgb), 0.3); /* プライマリカラーのRGB値が必要 */
+        }
+        .player-card.eliminated {
+            background-color: #fff0f0; /* 薄い赤 */
+            border-color: #f5c6cb; /* やや濃い赤のボーダー */
+            opacity: 0.7; /* 少し透明にする */
+        }
+        .player-card.eliminated .player-name,
+        .player-card.eliminated .player-info-item {
+            color: #721c24; /* 脱落者のテキスト色 */
+            text-decoration: line-through; /* 取り消し線 */
         }
         
         /* 結果モーダル */
@@ -322,37 +354,64 @@
         
         .leaderboard {
             width: 100%;
-            margin: 20px 0;
+            margin: 25px 0; /* マージン調整 */
             border-collapse: collapse;
+            border-radius: var(--border-radius); /* テーブル全体に角丸 */
+            overflow: hidden; /* 角丸を有効にするため */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* 軽い影 */
         }
         
         .leaderboard th, .leaderboard td {
-            padding: 10px;
+            padding: 12px 15px; /* パディング調整 */
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #e0e0e0; /* ボーダー色調整 */
         }
         
         .leaderboard th {
-            background-color: #f0f0f0;
+            background-color: var(--primary-color); /* プライマリカラー背景 */
+            color: white;
+            font-weight: 600; /* Poppins semi-bold */
+            font-size: 0.95em;
+            text-transform: uppercase; /* 大文字化 */
+            letter-spacing: 0.5px;
+        }
+        .leaderboard td {
+            font-size: 0.9em;
+        }
+
+        .leaderboard tr:last-child td {
+            border-bottom: none; /* 最後の行のボーダーを消す */
         }
         
-        .leaderboard tr:nth-child(1) td {
-            background-color: #ffd700;
-            font-weight: bold;
+        /* 上位3位のスタイル */
+        .leaderboard tr.rank-1 td {
+            background-color: #fff3cd; /* 淡い金色 */
+            color: #664d03;
+            font-weight: 600;
+        }
+        .leaderboard tr.rank-2 td {
+            background-color: #f0f0f0; /* 淡い銀色 */
+            color: #495057;
+        }
+        .leaderboard tr.rank-3 td {
+            background-color: #ffe8d1; /* 淡い銅色 */
+            color: #723c09;
         }
         
-        .leaderboard tr:nth-child(2) td {
-            background-color: #c0c0c0;
-        }
-        
-        .leaderboard tr:nth-child(3) td {
-            background-color: #cd7f32;
-        }
-        
-        .rank {
-            font-weight: bold;
-            width: 40px;
+        .rank { /* 順位セルのスタイル */
+            font-weight: 700; /* Poppins bold */
+            width: 50px; /* 幅調整 */
             text-align: center;
+            font-size: 1.1em; /* 少し大きく */
+        }
+        .leaderboard tr.rank-1 .rank {
+            color: #b38600; /* 金色の順位 */
+        }
+        .leaderboard tr.rank-2 .rank {
+            color: #6c757d; /* 銀色の順位 */
+        }
+        .leaderboard tr.rank-3 .rank {
+            color: #a0522d; /* 銅色の順位 */
         }
         
         .confetti {
@@ -373,18 +432,7 @@
                 opacity: 0;
             }
         }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes fadeOut {
-            from { opacity: 1; transform: translateY(0); }
-            to { opacity: 0; transform: translateY(-10px); }
-        }
-    </style>
-</head>
+</style>
 <body>
     <div class="container">
         <h1>Wikipedia オンライン対戦</h1>
@@ -455,15 +503,15 @@
                     <div id="game-guess-count" class="game-stat hidden">推測回数: 0</div>
                     <div id="game-mode-display" class="game-stat">モード: ナビゲーション</div>
                     <div id="target-display" class="game-stat">
-                        <span id="navigation-target">目標のページ: <span id="target-page-name">日本</span></span>
+                        <span id="navigation-target">目標のページ: <strong id="target-page-name">日本</strong></span>
                         <span id="guessing-target" class="hidden">現在のページの名前を当ててください</span>
                     </div>
                     <div id="current-page" class="game-stat">現在のページ: -</div>
                 </div>
-                <div style="display: flex; gap: 10px;">
+                <div class="game-header-controls">
                     <div id="answer-form" class="hidden" style="display: flex; gap: 5px;">
-                        <input type="text" id="answer-input" placeholder="ページ名を入力" style="padding: 5px; border-radius: 4px;">
-                        <button id="submit-answer-btn" class="btn" style="padding: 5px 10px;">回答</button>
+                        <input type="text" id="answer-input" placeholder="ページ名を入力">
+                        <button id="submit-answer-btn" class="btn">回答</button>
                     </div>
                     <button id="view-players-btn" class="btn">プレイヤー進捗</button>
                 </div>
@@ -876,21 +924,27 @@
             rooms.forEach((room, index) => {
                 const roomCard = document.createElement('div');
                 roomCard.className = 'room-card';
-                roomCard.style.animationDelay = `${index * 0.1}s`; // 個別に遅延を設定
+                roomCard.style.animationDelay = `${index * 0.1}s`;
 
                 const h3 = document.createElement('h3');
-                h3.textContent = room.name; // XSS対策
+                h3.textContent = room.name;
                 roomCard.appendChild(h3);
 
-                const statusDiv = document.createElement('div');
-                statusDiv.className = 'status';
-                statusDiv.textContent = `ステータス: ${room.status === 'waiting' ? '待機中' : 'ゲーム中'}`;
-                roomCard.appendChild(statusDiv);
+                // ルームのメタ情報（ステータスとプレイヤー数）を格納するコンテナ
+                const roomMetaDiv = document.createElement('div');
+                roomMetaDiv.className = 'room-meta';
+
+                const statusBadge = document.createElement('span');
+                statusBadge.className = `status-badge ${room.status === 'waiting' ? 'waiting' : 'playing'}`;
+                statusBadge.textContent = room.status === 'waiting' ? '待機中' : 'ゲーム中';
+                roomMetaDiv.appendChild(statusBadge);
 
                 const playersDiv = document.createElement('div');
                 playersDiv.className = 'players';
-                playersDiv.textContent = `プレイヤー: ${room.player_count}/${room.max_players}`;
-                roomCard.appendChild(playersDiv);
+                playersDiv.textContent = `${room.player_count} / ${room.max_players}人`;
+                roomMetaDiv.appendChild(playersDiv);
+                
+                roomCard.appendChild(roomMetaDiv);
                 
                 roomCard.addEventListener('click', function() {
                     socket.emit('join_room', {
@@ -1154,34 +1208,56 @@
             
             Object.entries(gameState.player_states).forEach(([pid, state], index) => {
                 const playerCard = document.createElement('div');
-                playerCard.className = `player-card ${state.finished ? 'finished' : ''} ${pid === playerId ? 'current-player' : ''}`;
-                playerCard.style.animationDelay = `${index * 0.1}s`; // 個別に遅延を設定
+                let cardClasses = 'player-card';
+                if (state.finished) cardClasses += ' finished';
+                if (pid === playerId) cardClasses += ' current-player';
+                if (state.eliminated) cardClasses += ' eliminated';
+                playerCard.className = cardClasses;
+                playerCard.style.animationDelay = `${index * 0.1}s`;
                 
-                // プレイヤー名を取得、なければIDを使用
                 const rawPlayerName = playerNames[pid] ? playerNames[pid].username : `プレイヤー${pid.substr(0, 4)}`;
                 
                 const playerNameDiv = document.createElement('div');
                 playerNameDiv.className = 'player-name';
-                let playerStatusText = '';
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = rawPlayerName;
+                playerNameDiv.appendChild(nameSpan);
+
+                const statusTextSpan = document.createElement('span');
+                statusTextSpan.className = 'status-text';
+                let statusTextContent = '';
+                if (pid === playerId) statusTextContent += ' (あなた)';
                 if (state.eliminated) {
-                    playerStatusText = ' (脱落)';
-                    playerCard.style.backgroundColor = '#ffebee'; // 脱落者は薄い赤色背景
-                    playerCard.style.borderColor = '#e57373';
+                    statusTextContent += ' (脱落)';
                 } else if (state.finished) {
-                    playerStatusText = ' ✓';
+                    statusTextContent += ' (ゴール)';
                 }
-                playerNameDiv.textContent = `${rawPlayerName} ${pid === playerId ? '(あなた)' : ''}${playerStatusText}`;
+                statusTextSpan.textContent = statusTextContent.trim();
+                if (statusTextSpan.textContent) { // ステータステキストがある場合のみ追加
+                    playerNameDiv.appendChild(document.createTextNode(' ')); // 名前の後にスペース
+                    playerNameDiv.appendChild(statusTextSpan);
+                }
                 playerCard.appendChild(playerNameDiv);
 
+                // 移動回数
                 const playerMovesDiv = document.createElement('div');
-                playerMovesDiv.className = 'player-moves';
-                playerMovesDiv.textContent = `移動回数: ${state.moves}`;
+                playerMovesDiv.className = 'player-info-item';
+                const movesLabel = document.createElement('strong');
+                movesLabel.textContent = '移動回数: ';
+                playerMovesDiv.appendChild(movesLabel);
+                playerMovesDiv.appendChild(document.createTextNode(state.moves));
                 playerCard.appendChild(playerMovesDiv);
 
+                // 現在のページ
                 const playerCurrentDiv = document.createElement('div');
-                playerCurrentDiv.className = 'player-current';
-                // URLのパス部分はユーザー入力ではないため、デコードして表示しても比較的安全だが、念のためtextContentを使用
-                playerCurrentDiv.textContent = `現在: ${decodeURIComponent(state.current_url).split('/').pop()}`;
+                playerCurrentDiv.className = 'player-info-item';
+                const currentLabel = document.createElement('strong');
+                currentLabel.textContent = '現在: ';
+                playerCurrentDiv.appendChild(currentLabel);
+                // ページ名はデコードして表示
+                const currentPageName = state.current_url ? decodeURIComponent(state.current_url).split('/').pop() : '-';
+                playerCurrentDiv.appendChild(document.createTextNode(currentPageName));
                 playerCard.appendChild(playerCurrentDiv);
                 
                 progressList.appendChild(playerCard);
@@ -1234,6 +1310,11 @@
             
             data.results.forEach(result => {
                 const row = document.createElement('tr');
+                // 順位に応じてクラスを付与
+                if (result.rank === 1) row.classList.add('rank-1');
+                else if (result.rank === 2) row.classList.add('rank-2');
+                else if (result.rank === 3) row.classList.add('rank-3');
+                
                 const timeTaken = result.time_taken ? formatTime(result.time_taken) : '-';
 
                 const rankTd = document.createElement('td');

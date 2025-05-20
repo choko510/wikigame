@@ -4,24 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <title>Wikipedia Navigation Game</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common_styles.css') }}">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
-        
-        body {
-            font-family: 'Poppins', Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #f5f5f5;
-        }
-
+        /* 共通化されていない、このページ固有のスタイル */
         #game-container {
             display: flex;
             width: 100%;
             height: 90vh;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border-radius: 8px;
-            overflow: hidden;
+            /* box-shadow and border-radius are in common_styles.css (.card like) */
+            overflow: hidden; /* Keep this if specific to game-container */
         }
 
         #start-frame {
@@ -30,39 +21,23 @@
             border: none;
         }
 
+        /* #game-stats is now using .card class, specific background/color can be overridden if needed */
+        /* For now, let's rely on .card and inline styles for flex, remove redundant properties */
         #game-stats {
-            margin: 15px 0;
-            padding: 12px 20px;
-            background: linear-gradient(135deg, #6e8efb, #a777e3);
-            border-radius: 8px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            color: white;
-            transition: all 0.3s ease;
+            /* background, border-radius, box-shadow, color are handled by .card or inline */
+            /* margin and padding are handled by .card and inline */
+            transition: all var(--transition-speed) ease; /* Keep transition if needed for other changes */
         }
 
         .stat {
-            margin: 0 15px;
-            font-weight: bold;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            margin: 5px 10px; /* Adjust margin for better spacing in flex container */
+            font-weight: 600; /* Poppins semi-bold */
+            text-shadow: none; /* Remove text-shadow for a cleaner look, or adjust if preferred */
+            font-size: 0.95em;
         }
         
-        #controls button {
-            background: linear-gradient(135deg, #6e8efb, #a777e3);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-            margin: 10px 0;
-        }
-        
-        #controls button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        }
+        /* #controls button is covered by .btn in common_styles.css */
+        /* We might need to adjust margins or specific styles if .btn is not enough */
         
         /* 完了モーダルのスタイル */
         @keyframes confetti {
@@ -88,34 +63,37 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.7);
+            background-color: rgba(0, 0, 0, 0.6); /* Slightly darker overlay */
             z-index: 1000;
             justify-content: center;
             align-items: center;
+            padding: 20px; /* Add padding for smaller screens */
         }
         
         #modal-content {
-            background: linear-gradient(135deg, #ffffff, #f8f9ff);
-            padding: 30px;
-            border-radius: 15px;
-            max-width: 600px;
+            background: var(--card-bg); /* Use common card background */
+            padding: 25px; /* Adjust padding */
+            border-radius: var(--border-radius); /* Use common border-radius */
+            max-width: 550px; /* Adjust max-width */
+            width: 100%; /* Ensure it's responsive */
             text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            box-shadow: var(--box-shadow); /* Use common box-shadow */
             position: relative;
-            animation: modal-appear 0.5s ease forwards, glow 2s infinite;
+            animation: modal-appear 0.4s ease-out forwards; /* Adjusted animation */
+            /* glow animation can be kept or removed based on preference */
         }
         
         .celebration-title {
-            color: #6e8efb;
-            font-size: 32px;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            color: var(--primary-color); /* Use CSS variable */
+            font-size: 2em; /* Adjust font size */
+            margin-bottom: 15px; /* Adjust margin */
+            font-weight: 700;
         }
         
         .stat-value {
-            color: #6e8efb;
-            font-weight: bold;
-            font-size: 1.2em;
+            color: var(--primary-color); /* Use CSS variable */
+            font-weight: 600;
+            font-size: 1.1em; /* Adjust font size */
         }
         
         .confetti {
@@ -135,32 +113,31 @@
             background-color: #f5f5f5;
             border-radius: 8px;
             text-align: left;
+            font-size: 0.9em;
         }
         
         #game-history ol {
-            padding-left: 25px;
+            padding-left: 20px; /* Adjust padding */
         }
         
         #game-history li {
-            padding: 5px 0;
+            padding: 4px 0; /* Adjust padding */
+            color: #444;
         }
         
         #modal-buttons button {
-            background: linear-gradient(135deg, #6e8efb, #a777e3);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: bold;
-            margin: 10px;
-            transition: all 0.3s ease;
+            /* This will now use the .btn class from common_styles.css */
+            /* Specific margins or other overrides can be added here if needed */
+            margin: 10px 8px; /* Adjust margin */
         }
         
+        /* Remove hover style if .btn hover is sufficient */
+        /*
         #modal-buttons button:hover {
             transform: translateY(-3px);
             box-shadow: 0 6px 15px rgba(0,0,0,0.2);
         }
+        */
         
         .rating {
             font-size: 24px;
@@ -168,6 +145,7 @@
             margin: 15px 0;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
+        /* .mode-btn.active is specific to this page, keep it */
     </style>
 </head>
 <body>
@@ -182,22 +160,20 @@
         <button class="type-btn active" onclick="setGameType('navigation')" style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">ナビゲーションモード</button>
         <button class="type-btn" onclick="setGameType('guessing')" style="background: #f0f0f0; color: #333; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">ページ名当てモード</button>
 
-    <div id="controls">
-        <button onclick="startGame()">新しいゲーム</button>
+    <div id="controls" style="margin-bottom: 15px; text-align: center;">
+        <button onclick="startGame()" class="btn">新しいゲーム</button>
     </div>
-<div id="game-stats">
+<div id="game-stats" class="card" style="margin-bottom: 15px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; padding: 15px;">
     <span id="moves" class="stat">移動回数: 0</span>
     <span id="guess-count" class="stat hidden">推測回数: 0</span>
-    <span id="navigation-target" class="stat">目標のページ: <span id="target-page-name">日本</span></span>
-    <span id="guessing-target" class="stat hidden">現在のページの名前を当ててください</span>
-    <span id="current-page" class="stat">現在のページ: -</span>
+    <span id="navigation-target" class="stat">目標: <span id="target-page-name">日本</span></span>
+    <span id="guessing-target" class="stat hidden">現在のページ名を当ててください</span>
+    <span id="current-page" class="stat">現在: -</span>
 </div>
 
-<div id="answer-form" class="hidden" style="display: flex; justify-content: center; margin-bottom: 15px; gap: 10px;">
-    <input type="text" id="answer-input" placeholder="ページ名を入力"
-           style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; width: 300px;">
-    <button id="submit-answer" onclick="checkAnswer()"
-            style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">
+<div id="answer-form" class="hidden" style="display: flex; justify-content: center; align-items: center; margin-bottom: 15px; gap: 10px;">
+    <input type="text" id="answer-input" placeholder="ページ名を入力" style="width: 300px; /* 個別の幅調整 */">
+    <button id="submit-answer" onclick="checkAnswer()" class="btn">
         回答する
     </button>
 </div>
@@ -215,9 +191,9 @@
             <p>目標ページ: <span id="final-target-page" class="stat-value">日本</span></p>
         </div>
         <div id="game-history"></div>
-        <div id="modal-buttons">
-            <button onclick="startGame()">新しいゲーム</button>
-            <button onclick="hideCompletionModal()">閉じる</button>
+        <div id="modal-buttons" style="margin-top: 20px;">
+            <button onclick="startGame()" class="btn">新しいゲーム</button>
+            <button onclick="hideCompletionModal()" class="btn">閉じる</button>
         </div>
         <!-- 紙吹雪エフェクト用の要素はJSで動的に生成 -->
     </div>

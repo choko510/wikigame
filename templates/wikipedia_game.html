@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Wikipedia Navigation Game</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f5f5f5;
+        }
+
+        #game-container {
+            display: flex;
+            width: 100%;
+            height: 90vh;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #start-frame {
+            width: 100%;
+            margin: 0;
+            border: none;
+        }
+
+        #game-stats {
+            margin: 15px 0;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .stat {
+            margin: 0 15px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        #controls button {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            margin: 10px 0;
+        }
+        
+        #controls button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        /* 完了モーダルのスタイル */
+        @keyframes confetti {
+            0% { transform: translateY(-1000px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(1000px) rotate(720deg); opacity: 0; }
+        }
+        
+        @keyframes modal-appear {
+            0% { transform: scale(0.5); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        @keyframes glow {
+            0% { box-shadow: 0 0 5px rgba(110, 142, 251, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(110, 142, 251, 0.8); }
+            100% { box-shadow: 0 0 5px rgba(110, 142, 251, 0.5); }
+        }
+        
+        #completion-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #modal-content {
+            background: linear-gradient(135deg, #ffffff, #f8f9ff);
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 600px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            position: relative;
+            animation: modal-appear 0.5s ease forwards, glow 2s infinite;
+        }
+        
+        .celebration-title {
+            color: #6e8efb;
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .stat-value {
+            color: #6e8efb;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 20px;
+            background-color: #6e8efb;
+            animation: confetti 5s ease-in-out infinite;
+            z-index: 1001;
+        }
+        
+        #game-history {
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            text-align: left;
+        }
+        
+        #game-history ol {
+            padding-left: 25px;
+        }
+        
+        #game-history li {
+            padding: 5px 0;
+        }
+        
+        #modal-buttons button {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        #modal-buttons button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+        }
+        
+        .rating {
+            font-size: 24px;
+            color: gold;
+            margin: 15px 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <h1 style="text-align: center; margin: 15px 0; color: #6e8efb;">Wikipedia ゲーム</h1>
+    
+    <div id="game-modes" style="display: flex; justify-content: center; margin-bottom: 20px; gap: 15px;">
+        <button class="mode-btn active" onclick="showSinglePlayer()" style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">シングルプレイ</button>
+        <button class="mode-btn" onclick="location.href='/multiplayer'" style="background: #f0f0f0; color: #333; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">マルチプレイ</button>
+    
+    <div id="game-type" style="display: flex; justify-content: center; margin-bottom: 20px; gap: 15px;">
+        <button class="type-btn active" onclick="setGameType('navigation')" style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">ナビゲーションモード</button>
+        <button class="type-btn" onclick="setGameType('guessing')" style="background: #f0f0f0; color: #333; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">ページ名当てモード</button>
+
+    <div id="controls">
+        <button onclick="startGame()">新しいゲーム</button>
+    </div>
+<div id="game-stats">
+    <span id="moves" class="stat">移動回数: 0</span>
+    <span id="guess-count" class="stat hidden">推測回数: 0</span>
+    <span id="navigation-target" class="stat">目標のページ: <span id="target-page-name">日本</span></span>
+    <span id="guessing-target" class="stat hidden">現在のページの名前を当ててください</span>
+    <span id="current-page" class="stat">現在のページ: -</span>
+</div>
+
+<div id="answer-form" class="hidden" style="display: flex; justify-content: center; margin-bottom: 15px; gap: 10px;">
+    <input type="text" id="answer-input" placeholder="ページ名を入力"
+           style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; width: 300px;">
+    <button id="submit-answer" onclick="checkAnswer()"
+            style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">
+        回答する
+    </button>
+</div>
+    </div>
+<!-- 完了時のモーダル -->
+<div id="completion-modal" style="display: none;">
+    <div id="modal-content">
+        <h2 class="celebration-title">🎉 目標達成！ 🎉</h2>
+        <div class="rating" id="performance-rating">★★★★★</div>
+        <div id="completion-message">素晴らしい！驚異的なナビゲーション能力です！</div>
+        
+        <div id="completion-stats">
+            <p>移動回数: <span id="final-moves" class="stat-value">0</span></p>
+            <p>開始ページ: <span id="start-page-name" class="stat-value">-</span></p>
+            <p>目標ページ: <span id="final-target-page" class="stat-value">日本</span></p>
+        </div>
+        <div id="game-history"></div>
+        <div id="modal-buttons">
+            <button onclick="startGame()">新しいゲーム</button>
+            <button onclick="hideCompletionModal()">閉じる</button>
+        </div>
+        <!-- 紙吹雪エフェクト用の要素はJSで動的に生成 -->
+    </div>
+</div>
+    </div>
+
+    <div id="game-container">
+        <iframe id="start-frame" src=""></iframe>
+    </div>
+
+    <script>
+        let startUrl = '';
+        let targetUrl = 'https://ja.wikipedia.org/wiki/日本';
+        let targetPath = '/wiki/日本'; // パス部分のみ（URLパース用）
+        let moveCount = 0;
+        let guessCount = 0; // 推測回数
+        let availableLinks = [];
+        let currentPage = '';
+        let gamePath = []; // 移動の履歴を保存
+        let gameResults = []; // 過去のゲーム結果を保存
+        let gameType = 'navigation'; // ゲームモード: 'navigation' または 'guessing'
+        let correctPageTitle = ''; // 当てるべきページタイトル（ページ名当てモード用）
+function updateStats() {
+    if (gameType === 'navigation') {
+        document.getElementById('moves').textContent = `移動回数: ${moveCount}`;
+        const pageName = currentPage ? decodeURIComponent(currentPage).split('/').pop() : '-';
+        document.getElementById('current-page').textContent = `現在のページ: ${pageName}`;
+    } else if (gameType === 'guessing') {
+        document.getElementById('guess-count').textContent = `推測回数: ${guessCount}`;
+        // ページ名当てモードでは現在のページ名を表示しない
+        document.getElementById('current-page').textContent = `現在のページ: ???`;
+    }
+}
+
+// ゲームタイプを設定する関数
+function setGameType(type) {
+    gameType = type;
+    
+    // ボタンの見た目を更新
+    const typeBtns = document.querySelectorAll('.type-btn');
+    typeBtns.forEach((btn, index) => {
+        btn.classList.remove('active');
+        btn.style.background = '#f0f0f0';
+        btn.style.color = '#333';
+    });
+    
+    // 選択されたボタンをアクティブにする
+    const activeIndex = type === 'navigation' ? 0 : 1;
+    typeBtns[activeIndex].classList.add('active');
+    typeBtns[activeIndex].style.background = 'linear-gradient(135deg, #6e8efb, #a777e3)';
+    typeBtns[activeIndex].style.color = 'white';
+    
+    // UI要素の表示/非表示を切り替え
+    if (type === 'navigation') {
+        document.getElementById('moves').classList.remove('hidden');
+        document.getElementById('guess-count').classList.add('hidden');
+        document.getElementById('navigation-target').classList.remove('hidden');
+        document.getElementById('guessing-target').classList.add('hidden');
+        document.getElementById('answer-form').classList.add('hidden');
+    } else {
+        document.getElementById('moves').classList.add('hidden');
+        document.getElementById('guess-count').classList.remove('hidden');
+        document.getElementById('navigation-target').classList.add('hidden');
+        document.getElementById('guessing-target').classList.remove('hidden');
+        document.getElementById('answer-form').classList.remove('hidden');
+    }
+    
+    // 現在のゲームが進行中なら再スタート
+    if (currentPage) {
+        startGame();
+    }
+}
+
+// 回答をチェックする関数
+function checkAnswer() {
+    const userAnswer = document.getElementById('answer-input').value.trim();
+    
+    if (!userAnswer) return; // 空の回答はチェックしない
+    
+    guessCount++;
+    updateStats();
+    
+    // 正解のページタイトルと比較（大文字小文字を区別しない）
+    if (userAnswer.toLowerCase() === correctPageTitle.toLowerCase()) {
+        // 正解した場合
+        saveGameResult();
+        showCompletionModal();
+        // 入力フィールドをクリア
+        document.getElementById('answer-input').value = '';
+    } else {
+        // 不正解の場合
+        showWrongAnswerToast();
+        // 入力フィールドを選択状態にして再入力しやすくする
+        document.getElementById('answer-input').select();
+    }
+}
+
+// 不正解時のトースト表示
+function showWrongAnswerToast() {
+    const toast = document.createElement('div');
+    toast.style.position = 'fixed';
+    toast.style.top = '20px';
+    toast.style.left = '50%';
+    toast.style.transform = 'translateX(-50%)';
+    toast.style.backgroundColor = '#ffebee';
+    toast.style.color = '#d32f2f';
+    toast.style.padding = '10px 20px';
+    toast.style.borderRadius = '5px';
+    toast.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    toast.style.fontWeight = 'bold';
+    toast.style.zIndex = '9999';
+    toast.textContent = '❌ 不正解です。もう一度挑戦してください。';
+    
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => toast.remove(), 500);
+    }, 2000);
+}
+
+        function hideCompletionModal() {
+            document.getElementById('completion-modal').style.display = 'none';
+        }
+
+        function createConfetti() {
+            const confettiCount = 100;
+            const colors = ['#6e8efb', '#a777e3', '#ffcc00', '#ff7675', '#55efc4', '#00cec9'];
+            const container = document.getElementById('completion-modal');
+            
+            // 既存の紙吹雪をクリア
+            const existingConfetti = document.querySelectorAll('.confetti');
+            existingConfetti.forEach(c => c.remove());
+            
+            // 新しい紙吹雪を作成
+            for (let i = 0; i < confettiCount; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.width = Math.random() * 15 + 5 + 'px';
+                confetti.style.height = Math.random() * 15 + 5 + 'px';
+                confetti.style.opacity = Math.random() + 0.5;
+                confetti.style.animationDuration = Math.random() * 3 + 2 + 's';
+                confetti.style.animationDelay = Math.random() * 5 + 's';
+                container.appendChild(confetti);
+            }
+        }
+        
+        function getRatingMessage(moves) {
+            if (moves <= 3) {
+                return {
+                    rating: "★★★★★",
+                    message: "天才的！驚異的なナビゲーション能力です！"
+                };
+            } else if (moves <= 5) {
+                return {
+                    rating: "★★★★☆",
+                    message: "素晴らしい！WikipediaのMVPですね！"
+                };
+            } else if (moves <= 8) {
+                return {
+                    rating: "★★★☆☆",
+                    message: "良いナビゲーション！知識の海を泳ぎこなしました！"
+                };
+            } else if (moves <= 12) {
+                return {
+                    rating: "★★☆☆☆",
+                    message: "よく頑張りました！次はもっと短い経路を探してみましょう。"
+                };
+            } else {
+                return {
+                    rating: "★☆☆☆☆",
+                    message: "ゴールにたどり着きました！練習あるのみです。"
+                };
+            }
+        }
+
+        function showCompletionModal() {
+            // 評価を設定
+            const rating = getRatingMessage(moveCount);
+            document.getElementById('performance-rating').textContent = rating.rating;
+            document.getElementById('completion-message').textContent = rating.message;
+            
+            // モーダルの内容を更新
+            document.getElementById('final-moves').textContent = moveCount;
+            document.getElementById('start-page-name').textContent = decodeURIComponent(startUrl).split('/').pop();
+            document.getElementById('final-target-page').textContent = decodeURIComponent(targetUrl).split('/').pop();
+
+            // 履歴表示
+            updateGameHistory();
+
+            // 紙吹雪エフェクト作成
+            createConfetti();
+
+            // モーダル表示
+            document.getElementById('completion-modal').style.display = 'flex';
+            
+            // 効果音を再生（オプション）
+            try {
+                const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3');
+                audio.volume = 0.5;
+                audio.play();
+            } catch (e) {
+                console.error('効果音再生エラー:', e);
+            }
+        }
+
+        function updateGameHistory() {
+            const historyDiv = document.getElementById('game-history');
+            historyDiv.innerHTML = '<h3>移動履歴</h3>';
+            
+            const historyList = document.createElement('ol');
+            gamePath.forEach(page => {
+                const item = document.createElement('li');
+                item.textContent = decodeURIComponent(page).split('/').pop();
+                historyList.appendChild(item);
+            });
+            
+            historyDiv.appendChild(historyList);
+        }
+
+        function saveGameResult() {
+            const result = {
+                startPage: decodeURIComponent(startUrl).split('/').pop(),
+                targetPage: decodeURIComponent(targetUrl).split('/').pop(),
+                moves: moveCount,
+                path: gamePath.map(url => decodeURIComponent(url).split('/').pop()),
+                date: new Date().toLocaleString()
+            };
+            
+            gameResults.push(result);
+            
+            // ローカルストレージに保存（オプション）
+            try {
+                localStorage.setItem('wikiGameResults', JSON.stringify(gameResults));
+            } catch (e) {
+                console.error('結果の保存に失敗:', e);
+            }
+            
+            return result;
+        }
+
+        async function fetchRandomPage() {
+            const response = await fetch('/api/random-page');
+            const data = await response.json();
+            return data.url;
+        }
+
+        async function fetchPageLinks(url) {
+            try {
+                const response = await fetch(`/api/page-links?url=${encodeURIComponent(url)}`);
+                const data = await response.json();
+                return data.links || [];
+            } catch (error) {
+                console.error('リンク取得エラー:', error);
+                return [];
+            }
+        }
+
+        async function startGame() {
+            moveCount = 0;
+            guessCount = 0;
+            currentPage = '';
+            gamePath = []; // 履歴をリセット
+            hideCompletionModal(); // モーダルを非表示
+            document.getElementById('answer-input').value = ''; // 回答フォームをクリア
+            
+            // ターゲットの再設定（固定）
+            targetUrl = 'https://ja.wikipedia.org/wiki/日本';
+            targetPath = '/wiki/日本';
+            document.getElementById('target-page-name').textContent = '日本';
+            updateStats();
+
+            try {
+                startUrl = await fetchRandomPage();
+                currentPage = startUrl;
+                gamePath.push(startUrl); // 開始ページを履歴に追加
+
+                // ゲームモードに応じたパラメータ付きでプロキシURLを構築
+                let frameUrl;
+                if (gameType === 'guessing') {
+                    frameUrl = `/proxy?url=${encodeURIComponent(startUrl)}&mode=guessing`;
+                    // 回答対象のページタイトルを取得
+                    correctPageTitle = decodeURIComponent(startUrl).split('/').pop().replace(/_/g, ' ');
+                } else {
+                    frameUrl = `/proxy?url=${encodeURIComponent(startUrl)}`;
+                }
+                
+                document.getElementById('start-frame').src = frameUrl;
+
+                availableLinks = await fetchPageLinks(startUrl);
+                updateStats();
+            } catch (error) {
+                console.error('ゲーム開始エラー:', error);
+                alert('ゲームの開始に失敗しました。もう一度お試しください。');
+            }
+        }
+
+        // URLがWikipediaの記事かどうかを確認する関数
+        function isValidWikipediaArticle(url) {
+            try {
+                const urlObj = new URL(url);
+                const path = urlObj.pathname;
+                return path.startsWith('/wiki/') &&
+                    !path.includes(':') &&
+                    !path.includes('Special:') &&
+                    !path.includes('Wikipedia:') &&
+                    !path.includes('File:') &&
+                    !path.includes('Template:');
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // イベントリスナーの設定
+        document.getElementById('start-frame').addEventListener('load', function () {
+            const frame = this;
+
+            try {
+                const frameDoc = frame.contentDocument || frame.contentWindow.document;
+
+                // スクリプトを無効化
+                const scripts = frameDoc.getElementsByTagName('script');
+                Array.from(scripts).forEach(script => script.remove());
+
+                // リンクにイベントリスナーを追加
+                const links = frameDoc.getElementsByTagName('a');
+                Array.from(links).forEach(link => {
+                    link.addEventListener('click', async function (e) {
+                        e.preventDefault();
+                        const href = this.getAttribute('href');
+
+                        if (href) {
+                            let fullUrl;
+                            if (href.startsWith('/wiki/')) {
+                                // 相対パスの場合
+                                fullUrl = `https://ja.wikipedia.org${href}`;
+                            } else if (href.includes('wikipedia.org')) {
+                                // 絶対パスの場合
+                                fullUrl = href;
+                            } else {
+                                // その他のリンクは無視
+                                return;
+                            }
+
+                            if (isValidWikipediaArticle(fullUrl)) {
+                                await navigateToPage(fullUrl);
+                            } else {
+                                console.log('無効なWikipediaリンク:', fullUrl);
+                            }
+                        }
+                    });
+                });
+
+                // スタイルの追加
+                const style = frameDoc.createElement('style');
+                style.textContent = `
+                    a { 
+                        cursor: pointer !important; 
+                        color: blue !important;
+                        text-decoration: underline !important;
+                    }
+                    a:hover { 
+                        text-decoration: underline !important; 
+                        color: darkblue !important;
+                    }
+                `;
+                frameDoc.head.appendChild(style);
+
+            } catch (e) {
+                console.error('フレーム処理エラー:', e);
+            }
+        });
+
+        // ページ遷移処理
+        async function navigateToPage(clickedUrl) {
+            try {
+                // 新しいページのリンクを取得
+                const newLinks = await fetchPageLinks(clickedUrl);
+
+                moveCount++;
+                currentPage = clickedUrl;
+                gamePath.push(clickedUrl); // 移動先を履歴に追加
+                availableLinks = newLinks;
+                updateStats();
+
+                // ゲームモードに応じて処理分岐
+                if (gameType === 'guessing') {
+                    // 新しいページタイトルを設定
+                    correctPageTitle = decodeURIComponent(clickedUrl).split('/').pop().replace(/_/g, ' ');
+                    
+                    // フレームを更新（タイトル隠しモード）
+                    const frameUrl = `/proxy?url=${encodeURIComponent(clickedUrl)}&mode=guessing`;
+                    document.getElementById('start-frame').src = frameUrl;
+                    
+                    // 回答フォームをクリア
+                    document.getElementById('answer-input').value = '';
+                    
+                    // 推測回数をリセット
+                    guessCount = 0;
+                    updateStats();
+                } else {
+                    // ナビゲーションモード
+                    // フレームを通常モードで更新
+                    const frameUrl = `/proxy?url=${encodeURIComponent(clickedUrl)}`;
+                    document.getElementById('start-frame').src = frameUrl;
+
+                    // サーバー側で目的のページに到達したかチェック
+                    console.log('検証中:', clickedUrl, targetUrl);
+                    
+                    // サーバーAPIを呼び出して判定
+                    fetch(`/api/check-target?current=${encodeURIComponent(clickedUrl)}&target=${encodeURIComponent(targetUrl)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            console.log('目標チェック結果:', data);
+                            
+                            if (data.is_target) {
+                                console.log('目標ページに到達しました！');
+                                // ゲーム結果を保存
+                                const gameResult = saveGameResult();
+                                
+                                // 結果モーダルを表示
+                                showCompletionModal();
+                            } else {
+                                console.log('目標ではありません。継続します。');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('目標チェックエラー:', error);
+                        });
+                }
+            } catch (error) {
+                console.error('ページ遷移エラー:', error);
+                alert('ページの遷移に失敗しました。');
+            }
+        }
+
+        // ゲーム開始
+        startGame();
+        
+        // ゲームモード切り替え
+        function showSinglePlayer() {
+            // シングルプレイヤーモードを表示（すでに表示されている）
+            const modeBtns = document.querySelectorAll('.mode-btn');
+            modeBtns.forEach(btn => btn.classList.remove('active'));
+            modeBtns[0].classList.add('active');
+            modeBtns[0].style.background = 'linear-gradient(135deg, #6e8efb, #a777e3)';
+            modeBtns[0].style.color = 'white';
+            modeBtns[1].style.background = '#f0f0f0';
+            modeBtns[1].style.color = '#333';
+        }
+    </script>
+    
+    <style>
+        .mode-btn.active {
+            background: linear-gradient(135deg, #6e8efb, #a777e3) !important;
+            color: white !important;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+        }
+    </style>
+</body>
+
+</html>

@@ -176,8 +176,14 @@ def proxy():
         # リンクを絶対パスに変換 (これは安全な操作なので残す)
         # ただし、soupオブジェクトに対して行う方がより堅牢
         for a_tag in soup.find_all('a', href=True):
-            if a_tag['href'].startswith('/wiki/'):
-                a_tag['href'] = f"https://ja.wikipedia.org{a_tag['href']}"
+            href = a_tag['href']
+            # 目次リンク (#で始まるもの) はそのまま保持
+            if href.startswith('#'):
+                # そのままにする - クライアント側で処理
+                pass
+            # /wiki/ で始まるリンクは絶対パスに変換
+            elif href.startswith('/wiki/'):
+                a_tag['href'] = f"https://ja.wikipedia.org{href}"
         
         content = str(soup) # 更新されたHTMLを取得
 
@@ -290,7 +296,10 @@ def handle_disconnect():
 def handle_create_room(data):
     """新しいゲームルームを作成"""
     player_id = request.sid
-    raw_username = data.get('username', f'プレイヤー{random.randint(1000, 9999)}')
+    # ユーザー名が提供されなければランダムな名前を生成
+    raw_username = data.get('username')
+    if not raw_username:
+        raw_username = f'プレイヤー{random.randint(1000, 9999)}'
     username = html.escape(raw_username)
     
     # 新しいルームIDを生成
@@ -330,7 +339,10 @@ def handle_join_room(data):
     """既存のゲームルームに参加"""
     player_id = request.sid
     room_id = data.get('room_id')
-    raw_username = data.get('username', f'プレイヤー{random.randint(1000, 9999)}')
+    # ユーザー名が提供されなければランダムな名前を生成
+    raw_username = data.get('username')
+    if not raw_username:
+        raw_username = f'プレイヤー{random.randint(1000, 9999)}'
     username = html.escape(raw_username)
     
     if not room_id or room_id not in rooms:
@@ -588,12 +600,11 @@ def handle_player_move(data):
         player_state['finish_time'] = time.time()
         
         # すべてのプレイヤーがゴールしたかチェック
-        all_finished = all(state['finished'] for state in game_state['player_states'].values())
+        all_finished = all(state.get('finished', False) for state in game_state['player_states'].values())
         
         if all_finished:
             game_state['finished'] = True
             rooms[room_id]['status'] = 'finished'
-    
     # 全プレイヤーに通知
     emit('player_moved', {
         'player_id': player_id,
@@ -638,7 +649,7 @@ def handle_player_move(data):
                 p_state = game_state['player_states'][p_id]
                 p_info = rooms[room_id]['player_info'][p_id]
                 time_taken = None
-                if p_state['finished'] and p_state['finish_time'] and game_state['started_at']:
+                if p_state.get('finished') and p_state.get('finish_time') and game_state.get('started_at'):
                     time_taken = p_state['finish_time'] - game_state['started_at']
 
                 results.append({
@@ -650,7 +661,8 @@ def handle_player_move(data):
                     'time_taken': time_taken
                 })
             
-            emit('game_finished', {
+            print(f"全員がゴールしました。game_finished通知を送信: {room_id}")
+            socketio.emit('game_finished', {
                 'results': results,
                 'game_state': game_state
             }, room=room_id)
@@ -699,28 +711,22 @@ def handle_ctrl_f_violation():
         if all_players_done:
             game_state['finished'] = True
             room['status'] = 'finished'
-            # ここで game_finished イベントを発行することもできるが、
-            # player_finished のロジックと重複するため、
-            # player_eliminated を受け取ったクライアント側で結果表示を促すか、
-            # 共通の終了処理を呼び出す形が良いかもしれない。
-            # 今回は player_eliminated で game_state を送るので、クライアントはそれに基づいて判断する。
-            # 必要であれば、ここで game_finished と同様の結果集計と送信を行う。
-            # 例えば、最後のプレイヤーが脱落してゲームが終わる場合など。
-            # ひとまず、player_eliminated で game_state を送ることで対応。
+            print(f"全員が終了または脱落しました: {room_id}")
             # もし全員が脱落またはゴールしたら、最終結果を送信する
-            if all(state.get('finished') for state in game_state['player_states'].values()):
+            # もし全員が脱落またはゴールしたら、最終結果を送信する
+            if all(state.get('finished', False) for state in game_state['player_states'].values()):
                 # 最終結果を作成 (handle_player_move からロジックを再利用または共通化)
-                finished_player_ids = [p_id for p_id, state in game_state['player_states'].items() if state['finished']]
+                finished_player_ids = [p_id for p_id, state in game_state['player_states'].items() if state.get('finished', False)]
                 finished_player_ids.sort(key=lambda p_id: (
                     game_state['player_states'][p_id]['moves'],
-                    game_state['player_states'][p_id]['finish_time']
+                    game_state['player_states'][p_id].get('finish_time', float('inf'))
                 ))
                 results = []
                 for i, p_id_res in enumerate(finished_player_ids): # p_id だと外側のスコープと被る可能性
                     p_state_res = game_state['player_states'][p_id_res]
                     p_info_res = rooms[room_id]['player_info'][p_id_res]
                     time_taken_res = None
-                    if p_state_res['finished'] and p_state_res['finish_time'] and game_state['started_at']:
+                    if p_state_res.get('finished') and p_state_res.get('finish_time') and game_state.get('started_at'):
                         time_taken_res = p_state_res['finish_time'] - game_state['started_at']
                     results.append({
                         'player_id': p_id_res,
@@ -731,8 +737,8 @@ def handle_ctrl_f_violation():
                         'time_taken': time_taken_res,
                         'eliminated': p_state_res.get('eliminated', False)
                     })
-                emit('game_finished', {'results': results, 'game_state': game_state}, room=room_id)
-
+                print(f"脱落後、全員が終了し、game_finished通知を送信: {room_id}")
+                socketio.emit('game_finished', {'results': results, 'game_state': game_state}, room=room_id)
 
 @socketio.on('leave_room_request')
 def handle_leave_room():

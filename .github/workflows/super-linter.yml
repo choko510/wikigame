@@ -1,10 +1,14 @@
-name: Super-Linter
+ame: Super-Linter
 
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+
+permissions:
+  contents: read
+  statuses: write
 
 jobs:
   lint-code-base:
@@ -17,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Super-Linter
-        uses: github/super-linter@v7
+        uses: github/super-linter@v7.4.0
         env:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: main

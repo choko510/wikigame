@@ -9,6 +9,7 @@ from collections import defaultdict
 import time
 import html
 import re
+import os
 from urllib.parse import urlparse
 from pykakasi import kakasi  # 日本語をローマ字に変換するライブラリ
 
@@ -125,6 +126,91 @@ def random_page():
     """ランダムなWikipediaページを取得"""
     url = get_random_wikipedia_page()
     return jsonify({'url': url})
+
+@app.route('/api/difficulty-page')
+def difficulty_page():
+    """指定された難易度からランダムなWikipediaページを取得"""
+    difficulty = request.args.get('difficulty', 'easy')
+    
+    # 有効な難易度チェック
+    valid_difficulties = ['easy', 'medium', 'hard']
+    if difficulty not in valid_difficulties:
+        return jsonify({'error': '無効な難易度です。easy, medium, hardのいずれかを指定してください。'}), 400
+    
+    try:
+        # 難易度ファイルのパス
+        file_path = os.path.join('gamedata', f'{difficulty}.txt')
+        
+        # ファイルが存在するかチェック
+        if not os.path.exists(file_path):
+            return jsonify({'error': f'{difficulty}.txtファイルが見つかりません。'}), 404
+        
+        # ファイルからランダムにURLを選択
+        with open(file_path, 'r', encoding='utf-8') as file:
+            urls = [line.strip() for line in file if line.strip()]
+            
+        if not urls:
+            return jsonify({'error': f'{difficulty}.txtファイルが空です。'}), 404
+            
+        # ランダムに1つ選択
+        selected_url = random.choice(urls)
+        
+        # URLの安全性チェック
+        if not is_safe_url(selected_url):
+            return jsonify({'error': '無効なURLが含まれています。'}), 400
+            
+        return jsonify({'url': selected_url})
+        
+    except Exception as e:
+        return jsonify({'error': f'ファイル読み込みエラー: {str(e)}'}), 500
+
+@app.route('/api/search-wikipedia')
+def search_wikipedia():
+    """Wikipedia記事を検索してサジェストを提供"""
+    query = request.args.get('query', '').strip()
+    
+    if not query:
+        return jsonify({'suggestions': []})
+    
+    if len(query) < 2:  # 2文字未満は検索しない
+        return jsonify({'suggestions': []})
+    
+    try:
+        # Wikipedia Search API を使用
+        search_url = 'https://ja.wikipedia.org/w/api.php'
+        params = {
+            'action': 'opensearch',
+            'search': query,
+            'limit': 8,  # 最大8件のサジェスト
+            'namespace': 0,  # メイン記事のみ
+            'format': 'json'
+        }
+        
+        response = requests.get(search_url, params=params, timeout=5)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # OpenSearch APIの結果形式: [query, [titles], [descriptions], [urls]]
+        if len(data) >= 4:
+            titles = data[1]
+            urls = data[3]
+            
+            suggestions = []
+            for i, (title, url) in enumerate(zip(titles, urls)):
+                if is_safe_url(url):  # 安全性チェック
+                    suggestions.append({
+                        'title': title,
+                        'url': url
+                    })
+            
+            return jsonify({'suggestions': suggestions})
+        else:
+            return jsonify({'suggestions': []})
+            
+    except Exception as e:
+        print(f"Wikipedia search error: {e}")
+        return jsonify({'suggestions': []})
 
 @app.route('/api/page-links')
 def page_links():
@@ -308,7 +394,8 @@ def handle_create_room(data):
         'target_url': 'https://ja.wikipedia.org/wiki/日本',  # 初期デフォルト値
         'settings': {
             'allow_ctrl_f': True, # デフォルトでCtrl+Fを許可
-            'game_mode': 'navigation'  # デフォルトはナビゲーションモード (navigation/guessing)
+            'game_mode': 'navigation',  # デフォルトはナビゲーションモード (navigation/guessing)
+            'difficulty': 'easy'  # デフォルト難易度
         }
     }
     
@@ -456,7 +543,7 @@ def handle_update_room_settings(data):
     if settings_data:
         # 設定が初期化されていない場合は初期化
         if 'settings' not in room:
-            room['settings'] = {'allow_ctrl_f': True, 'game_mode': 'navigation'}
+            room['settings'] = {'allow_ctrl_f': True, 'game_mode': 'navigation', 'difficulty': 'easy'}
             
         # Ctrl+F設定更新
         if 'allow_ctrl_f' in settings_data:
@@ -466,6 +553,11 @@ def handle_update_room_settings(data):
         if 'game_mode' in settings_data:
             if settings_data['game_mode'] in ['navigation', 'guessing']:
                 room['settings']['game_mode'] = settings_data['game_mode']
+                
+        # 難易度設定更新
+        if 'difficulty' in settings_data:
+            if settings_data['difficulty'] in ['easy', 'medium', 'hard']:
+                room['settings']['difficulty'] = settings_data['difficulty']
     
     # 更新されたルーム情報をブロードキャスト
     # 'room_info' には更新された settings が含まれるようにする
@@ -504,8 +596,44 @@ def handle_start_game():
         emit('error', {'message': '最低2人のプレイヤーが必要です'})
         return
     
-    # ランダムなスタートページとターゲットページを生成
-    start_url = get_random_wikipedia_page() # これはWikipediaなので安全
+    # ゲームモードに応じてスタートページを生成
+    game_mode = room.get('settings', {}).get('game_mode', 'navigation')
+    
+    if game_mode == 'guessing':
+        # ページ名当てモードの場合は難易度に応じたページを選択
+        difficulty = room.get('settings', {}).get('difficulty', 'easy')
+        try:
+            # 難易度ファイルのパス
+            file_path = os.path.join('gamedata', f'{difficulty}.txt')
+            
+            # ファイルが存在するかチェック
+            if not os.path.exists(file_path):
+                emit('error', {'message': f'{difficulty}.txtファイルが見つかりません。'})
+                return
+            
+            # ファイルからランダムにURLを選択
+            with open(file_path, 'r', encoding='utf-8') as file:
+                urls = [line.strip() for line in file if line.strip()]
+                
+            if not urls:
+                emit('error', {'message': f'{difficulty}.txtファイルが空です。'})
+                return
+                
+            # ランダムに1つ選択
+            start_url = random.choice(urls)
+            
+            # URLの安全性チェック
+            if not is_safe_url(start_url):
+                emit('error', {'message': '無効なURLが含まれています。'})
+                return
+                
+        except Exception as e:
+            emit('error', {'message': f'難易度ファイル読み込みエラー: {str(e)}'})
+            return
+    else:
+        # ナビゲーションモードの場合は従来通りランダムページ
+        start_url = get_random_wikipedia_page() # これはWikipediaなので安全
+    
     # room['target_url'] は is_safe_url で検証済み
     target_url = room.get('target_url', 'https://ja.wikipedia.org/wiki/日本')
     
@@ -833,6 +961,111 @@ def handle_reset_room(data):
     }, room=room_id)
     
     print(f"Room {room_id} has been reset for a new game")
+
+@socketio.on('submit_answer')
+def handle_submit_answer(data):
+    """ページ名当てモードでの回答を処理"""
+    player_id = request.sid
+    room_id = data.get('room_id')
+    answer = data.get('answer', '').strip()
+    current_url = data.get('current_url', '')
+    guess_count = data.get('guess_count', 0)
+    
+    if not player_id in player_rooms:
+        emit('error', {'message': '部屋に参加していません'})
+        return
+    
+    if room_id not in rooms or room_id not in game_states:
+        emit('error', {'message': 'ゲームがアクティブではありません'})
+        return
+    
+    room = rooms[room_id]
+    game_state = game_states[room_id]
+    player_state = game_state['player_states'].get(player_id)
+    
+    # ページ名当てモードでない場合は無効
+    if room.get('settings', {}).get('game_mode', 'navigation') != 'guessing':
+        emit('error', {'message': 'このモードでは回答できません'})
+        return
+    
+    # プレイヤーが既にゴールしているか、脱落している場合は何もしない
+    if player_state['finished'] or player_state.get('eliminated', False):
+        return
+    
+    if not answer:
+        return
+    
+    # 推測回数を増やす
+    guess_count += 1
+    
+    # 現在のページの正解タイトルを取得
+    correct_title = ''
+    if current_url and room_id in rooms and 'current_pages' in rooms[room_id]:
+        correct_title = rooms[room_id]['current_pages'].get(current_url, '')
+    
+    # 回答が正解かチェック（大文字小文字を区別しない）
+    is_correct = answer.lower() == correct_title.lower()
+    
+    if is_correct:
+        # 正解の場合、新しい難易度ページを取得
+        difficulty = room.get('settings', {}).get('difficulty', 'easy')
+        try:
+            # 難易度ファイルのパス
+            file_path = os.path.join('gamedata', f'{difficulty}.txt')
+            
+            # ファイルが存在するかチェック
+            if not os.path.exists(file_path):
+                emit('error', {'message': f'{difficulty}.txtファイルが見つかりません。'})
+                return
+            
+            # ファイルからランダムにURLを選択
+            with open(file_path, 'r', encoding='utf-8') as file:
+                urls = [line.strip() for line in file if line.strip()]
+                
+            if not urls:
+                emit('error', {'message': f'{difficulty}.txtファイルが空です。'})
+                return
+                
+            # ランダムに1つ選択
+            new_url = random.choice(urls)
+            
+            # URLの安全性チェック
+            if not is_safe_url(new_url):
+                emit('error', {'message': '無効なURLが含まれています。'})
+                return
+            
+            # プレイヤー状態を更新
+            player_state['moves'] += 1
+            player_state['current_url'] = new_url
+            player_state['path'].append(new_url)
+            
+            # 推測回数をリセット
+            guess_count = 0
+            
+            # 正解通知を送信
+            emit('answer_result', {
+                'is_correct': True,
+                'correct_title': correct_title,
+                'new_url': new_url,
+                'guess_count': guess_count
+            })
+            
+            # 他のプレイヤーに正解通知
+            emit('player_answered_correctly', {
+                'player_id': player_id,
+                'player_name': room['player_info'][player_id]['username'],
+                'game_state': game_state
+            }, room=room_id, include_self=False)
+            
+        except Exception as e:
+            emit('error', {'message': f'新しいページ取得エラー: {str(e)}'})
+            return
+    else:
+        # 不正解の場合
+        emit('answer_result', {
+            'is_correct': False,
+            'guess_count': guess_count
+        })
 
 # アプリケーション起動
 if __name__ == '__main__':

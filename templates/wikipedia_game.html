@@ -159,6 +159,14 @@
     <div id="game-type" style="display: flex; justify-content: center; margin-bottom: 20px; gap: 15px;">
         <button class="type-btn active" onclick="setGameType('navigation')" style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">ナビゲーションモード</button>
         <button class="type-btn" onclick="setGameType('guessing')" style="background: #f0f0f0; color: #333; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">ページ名当てモード</button>
+    </div>
+
+    <!-- 難易度選択UI（ページ名当てモード用） -->
+    <div id="difficulty-selection" class="hidden" style="display: flex; justify-content: center; margin-bottom: 20px; gap: 10px; align-items: center;">
+        <span style="font-weight: bold; color: #6e8efb;">難易度:</span>
+        <button class="difficulty-btn active" onclick="setDifficulty('easy')" style="background: linear-gradient(135deg, #55efc4, #00cec9); color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">Easy</button>
+        <button class="difficulty-btn" onclick="setDifficulty('medium')" style="background: #f0f0f0; color: #333; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">Medium</button>
+        <button class="difficulty-btn" onclick="setDifficulty('hard')" style="background: #f0f0f0; color: #333; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">Hard</button>
 
     <div id="controls" style="margin-bottom: 15px; text-align: center;">
         <button onclick="startGame()" class="btn">新しいゲーム</button>
@@ -216,6 +224,7 @@
         let gameResults = []; // 過去のゲーム結果を保存
         let gameType = 'navigation'; // ゲームモード: 'navigation' または 'guessing'
         let correctPageTitle = ''; // 当てるべきページタイトル（ページ名当てモード用）
+        let difficulty = 'easy'; // 難易度: 'easy', 'medium', 'hard'
 function updateStats() {
     if (gameType === 'navigation') {
         document.getElementById('moves').textContent = `移動回数: ${moveCount}`;
@@ -253,16 +262,60 @@ function setGameType(type) {
         document.getElementById('navigation-target').classList.remove('hidden');
         document.getElementById('guessing-target').classList.add('hidden');
         document.getElementById('answer-form').classList.add('hidden');
+        document.getElementById('difficulty-selection').classList.add('hidden');
     } else {
         document.getElementById('moves').classList.add('hidden');
         document.getElementById('guess-count').classList.remove('hidden');
         document.getElementById('navigation-target').classList.add('hidden');
         document.getElementById('guessing-target').classList.remove('hidden');
         document.getElementById('answer-form').classList.remove('hidden');
+        document.getElementById('difficulty-selection').classList.remove('hidden');
     }
     
     // 現在のゲームが進行中なら再スタート
     if (currentPage) {
+        startGame();
+    }
+}
+
+// 難易度を設定する関数
+function setDifficulty(newDifficulty) {
+    difficulty = newDifficulty;
+    
+    // ボタンの見た目を更新
+    const difficultyBtns = document.querySelectorAll('.difficulty-btn');
+    difficultyBtns.forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.background = '#f0f0f0';
+        btn.style.color = '#333';
+    });
+    
+    // 選択されたボタンをアクティブにする
+    const difficulties = ['easy', 'medium', 'hard'];
+    const activeIndex = difficulties.indexOf(newDifficulty);
+    if (activeIndex !== -1) {
+        difficultyBtns[activeIndex].classList.add('active');
+        
+        // 難易度に応じて色を変える
+        let gradientColor;
+        switch (newDifficulty) {
+            case 'easy':
+                gradientColor = 'linear-gradient(135deg, #55efc4, #00cec9)';
+                break;
+            case 'medium':
+                gradientColor = 'linear-gradient(135deg, #fdcb6e, #e17055)';
+                break;
+            case 'hard':
+                gradientColor = 'linear-gradient(135deg, #e84393, #fd79a8)';
+                break;
+        }
+        
+        difficultyBtns[activeIndex].style.background = gradientColor;
+        difficultyBtns[activeIndex].style.color = 'white';
+    }
+    
+    // ページ名当てモードで現在ゲーム中なら再スタート
+    if (gameType === 'guessing' && currentPage) {
         startGame();
     }
 }
@@ -443,6 +496,15 @@ function showWrongAnswerToast() {
             return data.url;
         }
 
+        async function fetchDifficultyPage(difficulty) {
+            const response = await fetch(`/api/difficulty-page?difficulty=${difficulty}`);
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            return data.url;
+        }
+
         async function fetchPageLinks(url) {
             try {
                 const response = await fetch(`/api/page-links?url=${encodeURIComponent(url)}`);
@@ -462,34 +524,40 @@ function showWrongAnswerToast() {
             hideCompletionModal(); // モーダルを非表示
             document.getElementById('answer-input').value = ''; // 回答フォームをクリア
             
-            // ターゲットの再設定（固定）
-            targetUrl = 'https://ja.wikipedia.org/wiki/日本';
-            targetPath = '/wiki/日本';
-            document.getElementById('target-page-name').textContent = '日本';
-            updateStats();
-
             try {
-                startUrl = await fetchRandomPage();
-                currentPage = startUrl;
-                gamePath.push(startUrl); // 開始ページを履歴に追加
-
-                // ゲームモードに応じたパラメータ付きでプロキシURLを構築
-                let frameUrl;
                 if (gameType === 'guessing') {
-                    frameUrl = `/proxy?url=${encodeURIComponent(startUrl)}&mode=guessing`;
+                    // ページ名当てモードの場合は難易度に応じたページを取得
+                    startUrl = await fetchDifficultyPage(difficulty);
+                    currentPage = startUrl;
+                    gamePath.push(startUrl); // 開始ページを履歴に追加
+
                     // 回答対象のページタイトルを取得
                     correctPageTitle = decodeURIComponent(startUrl).split('/').pop().replace(/_/g, ' ');
+                    
+                    // タイトル隠しモードでフレームを設定
+                    const frameUrl = `/proxy?url=${encodeURIComponent(startUrl)}&mode=guessing`;
+                    document.getElementById('start-frame').src = frameUrl;
                 } else {
-                    frameUrl = `/proxy?url=${encodeURIComponent(startUrl)}`;
+                    // ナビゲーションモードの場合は従来通りランダムページ
+                    // ターゲットの再設定（固定）
+                    targetUrl = 'https://ja.wikipedia.org/wiki/日本';
+                    targetPath = '/wiki/日本';
+                    document.getElementById('target-page-name').textContent = '日本';
+                    
+                    startUrl = await fetchRandomPage();
+                    currentPage = startUrl;
+                    gamePath.push(startUrl); // 開始ページを履歴に追加
+
+                    // 通常モードでフレームを設定
+                    const frameUrl = `/proxy?url=${encodeURIComponent(startUrl)}`;
+                    document.getElementById('start-frame').src = frameUrl;
                 }
-                
-                document.getElementById('start-frame').src = frameUrl;
 
                 availableLinks = await fetchPageLinks(startUrl);
                 updateStats();
             } catch (error) {
                 console.error('ゲーム開始エラー:', error);
-                alert('ゲームの開始に失敗しました。もう一度お試しください。');
+                alert(`ゲームの開始に失敗しました。${error.message || 'もう一度お試しください。'}`);
             }
         }
 
@@ -583,19 +651,33 @@ function showWrongAnswerToast() {
 
                 // ゲームモードに応じて処理分岐
                 if (gameType === 'guessing') {
-                    // 新しいページタイトルを設定
-                    correctPageTitle = decodeURIComponent(clickedUrl).split('/').pop().replace(/_/g, ' ');
-                    
-                    // フレームを更新（タイトル隠しモード）
-                    const frameUrl = `/proxy?url=${encodeURIComponent(clickedUrl)}&mode=guessing`;
-                    document.getElementById('start-frame').src = frameUrl;
-                    
-                    // 回答フォームをクリア
-                    document.getElementById('answer-input').value = '';
-                    
-                    // 推測回数をリセット
-                    guessCount = 0;
-                    updateStats();
+                    // ページ名当てモードの場合は、移動先で新しい難易度ページを取得
+                    try {
+                        const newTargetUrl = await fetchDifficultyPage(difficulty);
+                        currentPage = newTargetUrl;
+                        gamePath[gamePath.length - 1] = newTargetUrl; // 最後の履歴を更新
+                        
+                        // 新しいページタイトルを設定
+                        correctPageTitle = decodeURIComponent(newTargetUrl).split('/').pop().replace(/_/g, ' ');
+                        
+                        // フレームを更新（タイトル隠しモード）
+                        const frameUrl = `/proxy?url=${encodeURIComponent(newTargetUrl)}&mode=guessing`;
+                        document.getElementById('start-frame').src = frameUrl;
+                        
+                        // 回答フォームをクリア
+                        document.getElementById('answer-input').value = '';
+                        
+                        // 推測回数をリセット
+                        guessCount = 0;
+                        
+                        // 新しいページのリンクを取得
+                        availableLinks = await fetchPageLinks(newTargetUrl);
+                        updateStats();
+                    } catch (error) {
+                        console.error('新しいページ取得エラー:', error);
+                        alert(`新しいページの取得に失敗しました。${error.message || ''}`);
+                        return;
+                    }
                 } else {
                     // ナビゲーションモード
                     // フレームを通常モードで更新

@@ -6,38 +6,149 @@
     <title>Wikipedia Navigation Game</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/common_styles.css') }}">
     <style>
-        /* 共通化されていない、このページ固有のスタイル */
+        /* ページ固有のスタイル */
         #game-container {
             display: flex;
             width: 100%;
-            height: 90vh;
-            /* box-shadow and border-radius are in common_styles.css (.card like) */
-            overflow: hidden; /* Keep this if specific to game-container */
+            height: calc(100vh - 220px);
+            min-height: 400px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            overflow: hidden;
+            position: relative;
+            margin-top: 15px;
         }
-
+        
         #start-frame {
             width: 100%;
+            height: 100%;
             margin: 0;
             border: none;
+            background: #fff;
         }
 
-        /* #game-stats is now using .card class, specific background/color can be overridden if needed */
-        /* For now, let's rely on .card and inline styles for flex, remove redundant properties */
         #game-stats {
-            /* background, border-radius, box-shadow, color are handled by .card or inline */
-            /* margin and padding are handled by .card and inline */
-            transition: all var(--transition-speed) ease; /* Keep transition if needed for other changes */
+            transition: all var(--transition-speed) ease;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        #game-header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            padding: 0 15px;
+            margin-bottom: 5px;
+        }
+        
+        #game-controls-wrapper {
+            width: 100%;
+            max-width: 1000px;
+        }
+        
+        .game-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+        }
+
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-items: center;
+            margin: 5px;
+        }
+
+        .control-group-label {
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-right: 5px;
         }
 
         .stat {
-            margin: 5px 10px; /* Adjust margin for better spacing in flex container */
-            font-weight: 600; /* Poppins semi-bold */
-            text-shadow: none; /* Remove text-shadow for a cleaner look, or adjust if preferred */
+            margin: 5px 10px;
+            font-weight: 600;
             font-size: 0.95em;
+            padding: 8px 12px;
+            background-color: rgba(var(--primary-color-rgb), 0.1);
+            border-radius: 20px;
+            display: inline-block;
         }
         
-        /* #controls button is covered by .btn in common_styles.css */
-        /* We might need to adjust margins or specific styles if .btn is not enough */
+        .stat-highlight {
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+        
+        /* モード選択ボタンスタイル */
+        .toggle-btn-group {
+            display: flex;
+            background: #eaeaea;
+            border-radius: 25px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .toggle-btn {
+            padding: 8px 15px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+            transition: color 0.3s ease;
+            font-weight: 600;
+            min-width: 120px;
+            color: #666;
+        }
+
+        .toggle-btn.active {
+            color: white;
+        }
+
+        .toggle-btn-slider {
+            position: absolute;
+            height: 100%;
+            top: 0;
+            left: 0;
+            width: 50%;
+            border-radius: 25px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            transition: transform 0.3s ease;
+        }
+        
+        /* 進行状況表示 */
+        .progress-indicator {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            width: 100%;
+        }
+        
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: #eee;
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(to right, #55efc4, var(--primary-color));
+            width: 0%;
+            transition: width 0.5s ease-out;
+        }
         
         /* 完了モーダルのスタイル */
         @keyframes confetti {
@@ -131,61 +242,150 @@
             margin: 10px 8px; /* Adjust margin */
         }
         
-        /* Remove hover style if .btn hover is sufficient */
-        /*
-        #modal-buttons button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
-        }
-        */
-        
         .rating {
             font-size: 24px;
             color: gold;
             margin: 15px 0;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
-        /* .mode-btn.active is specific to this page, keep it */
+
+        /* モバイルレスポンシブ対応 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            #game-container {
+                height: calc(100vh - 280px);
+            }
+            
+            .game-controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .control-group {
+                width: 100%;
+                justify-content: center;
+                margin: 5px 0;
+            }
+            
+            .toggle-btn {
+                min-width: auto;
+                padding: 8px 10px;
+                font-size: 0.9em;
+            }
+            
+            #game-stats {
+                flex-direction: column;
+            }
+            
+            .stat {
+                margin: 3px;
+                font-size: 0.85em;
+                text-align: center;
+            }
+
+            #modal-content {
+                padding: 15px;
+            }
+        }
+        
+        /* キーボードアクセシビリティを向上するため、フォーカス状態のスタイル */
+        .btn:focus, .toggle-btn:focus {
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+        
+        /* アニメーション効果 */
+        .fade-in {
+            animation: fadeIn 0.5s ease forwards;
+        }
+        
+        @keyframes slide-in {
+            from { transform: translateY(10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* 各種視覚効果の改善 */
+        .game-controls {
+            animation: slide-in 0.3s ease-out;
+        }
+        
+        .stat {
+            transition: all 0.3s ease;
+        }
+        
+        .stat-highlight {
+            animation: pulse 1.5s infinite alternate;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
-
-    <h1 style="text-align: center; margin: 15px 0; color: #6e8efb;">Wikipedia ゲーム</h1>
-    
-    <div id="game-modes" style="display: flex; justify-content: center; margin-bottom: 20px; gap: 15px;">
-        <button class="mode-btn active" onclick="showSinglePlayer()" style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">シングルプレイ</button>
-        <button class="mode-btn" onclick="location.href='/multiplayer'" style="background: #f0f0f0; color: #333; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">マルチプレイ</button>
-    
-    <div id="game-type" style="display: flex; justify-content: center; margin-bottom: 20px; gap: 15px;">
-        <button class="type-btn active" onclick="setGameType('navigation')" style="background: linear-gradient(135deg, #6e8efb, #a777e3); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">ナビゲーションモード</button>
-        <button class="type-btn" onclick="setGameType('guessing')" style="background: #f0f0f0; color: #333; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">ページ名当てモード</button>
+    <div id="game-header">
+        <h1>Wikipedia ゲーム</h1>
+        
+        <div id="game-controls-wrapper">
+            <div class="game-controls">
+                <div class="control-group">
+                    <div class="toggle-btn-group">
+                        <div class="toggle-btn-slider"></div>
+                        <button class="toggle-btn active" onclick="showSinglePlayer()">シングルプレイ</button>
+                        <button class="toggle-btn" onclick="location.href='/multiplayer'">マルチプレイ</button>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <div class="toggle-btn-group" id="game-type-toggle">
+                        <div class="toggle-btn-slider"></div>
+                        <button class="toggle-btn active" onclick="setGameType('navigation')">ナビゲーション</button>
+                        <button class="toggle-btn" onclick="setGameType('guessing')">ページ名当て</button>
+                    </div>
+                </div>
+                
+                <div id="difficulty-selection" class="control-group hidden">
+                    <span class="control-group-label">難易度:</span>
+                    <div class="toggle-btn-group">
+                        <div class="toggle-btn-slider"></div>
+                        <button class="toggle-btn active" onclick="setDifficulty('easy')">Easy</button>
+                        <button class="toggle-btn" onclick="setDifficulty('medium')">Medium</button>
+                        <button class="toggle-btn" onclick="setDifficulty('hard')">Hard</button>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <button onclick="startGame()" class="btn">新しいゲーム</button>
+                </div>
+            </div>
+            
+            <div id="game-stats" class="card">
+                <span id="moves" class="stat">移動回数: <span class="stat-highlight">0</span></span>
+                <span id="guess-count" class="stat hidden">推測回数: <span class="stat-highlight">0</span></span>
+                <span id="navigation-target" class="stat">目標: <span id="target-page-name" class="stat-highlight">日本</span></span>
+                <span id="guessing-target" class="stat hidden">ページ名を当ててください</span>
+                <span id="current-page" class="stat">現在: <span class="stat-highlight">-</span></span>
+                
+                <div class="progress-indicator">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="answer-form" class="hidden" style="display: flex; justify-content: center; align-items: center; margin: 10px 0; gap: 10px;">
+                <input type="text" id="answer-input" placeholder="ページ名を入力" style="flex: 1; max-width: 400px;">
+                <button id="submit-answer" onclick="checkAnswer()" class="btn">
+                    回答する
+                </button>
+            </div>
+        </div>
     </div>
 
-    <!-- 難易度選択UI（ページ名当てモード用） -->
-    <div id="difficulty-selection" class="hidden" style="display: flex; justify-content: center; margin-bottom: 20px; gap: 10px; align-items: center;">
-        <span style="font-weight: bold; color: #6e8efb;">難易度:</span>
-        <button class="difficulty-btn active" onclick="setDifficulty('easy')" style="background: linear-gradient(135deg, #55efc4, #00cec9); color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">Easy</button>
-        <button class="difficulty-btn" onclick="setDifficulty('medium')" style="background: #f0f0f0; color: #333; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">Medium</button>
-        <button class="difficulty-btn" onclick="setDifficulty('hard')" style="background: #f0f0f0; color: #333; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold;">Hard</button>
-
-    <div id="controls" style="margin-bottom: 15px; text-align: center;">
-        <button onclick="startGame()" class="btn">新しいゲーム</button>
-    </div>
-<div id="game-stats" class="card" style="margin-bottom: 15px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; padding: 15px;">
-    <span id="moves" class="stat">移動回数: 0</span>
-    <span id="guess-count" class="stat hidden">推測回数: 0</span>
-    <span id="navigation-target" class="stat">目標: <span id="target-page-name">日本</span></span>
-    <span id="guessing-target" class="stat hidden">現在のページ名を当ててください</span>
-    <span id="current-page" class="stat">現在: -</span>
-</div>
-
-<div id="answer-form" class="hidden" style="display: flex; justify-content: center; align-items: center; margin-bottom: 15px; gap: 10px;">
-    <input type="text" id="answer-input" placeholder="ページ名を入力" style="width: 300px; /* 個別の幅調整 */">
-    <button id="submit-answer" onclick="checkAnswer()" class="btn">
-        回答する
-    </button>
-</div>
-    </div>
 <!-- 完了時のモーダル -->
 <div id="completion-modal" style="display: none;">
     <div id="modal-content">
@@ -206,7 +406,6 @@
         <!-- 紙吹雪エフェクト用の要素はJSで動的に生成 -->
     </div>
 </div>
-    </div>
 
     <div id="game-container">
         <iframe id="start-frame" src=""></iframe>
@@ -225,35 +424,54 @@
         let gameType = 'navigation'; // ゲームモード: 'navigation' または 'guessing'
         let correctPageTitle = ''; // 当てるべきページタイトル（ページ名当てモード用）
         let difficulty = 'easy'; // 難易度: 'easy', 'medium', 'hard'
+        let expectedMoveCount = 6; // 想定される移動回数（プログレスバー用）
+
 function updateStats() {
     if (gameType === 'navigation') {
-        document.getElementById('moves').textContent = `移動回数: ${moveCount}`;
-        const pageName = currentPage ? decodeURIComponent(currentPage).split('/').pop() : '-';
-        document.getElementById('current-page').textContent = `現在のページ: ${pageName}`;
+        document.getElementById('moves').innerHTML = `移動回数: <span class="stat-highlight">${moveCount}</span>`;
+        const pageName = currentPage ? decodeURIComponent(currentPage).split('/').pop().replace(/_/g, ' ') : '-';
+        document.getElementById('current-page').innerHTML = `現在: <span class="stat-highlight">${pageName}</span>`;
+        
+        // プログレスバーを更新（目標への接近度、単純な比率で）
+        updateProgressBar();
     } else if (gameType === 'guessing') {
-        document.getElementById('guess-count').textContent = `推測回数: ${guessCount}`;
+        document.getElementById('guess-count').innerHTML = `推測回数: <span class="stat-highlight">${guessCount}</span>`;
         // ページ名当てモードでは現在のページ名を表示しない
-        document.getElementById('current-page').textContent = `現在のページ: ???`;
+        document.getElementById('current-page').innerHTML = `現在: <span class="stat-highlight">???</span>`;
     }
+}
+
+// プログレスバーを更新（ナビゲーションモード用）
+function updateProgressBar() {
+    // 移動回数に基づいてプログレスを計算
+    // 最大移動回数を超えると100%に
+    const progressPercent = Math.min(moveCount / expectedMoveCount * 100, 100);
+    document.getElementById('progress-fill').style.width = `${progressPercent}%`;
 }
 
 // ゲームタイプを設定する関数
 function setGameType(type) {
     gameType = type;
     
-    // ボタンの見た目を更新
-    const typeBtns = document.querySelectorAll('.type-btn');
-    typeBtns.forEach((btn, index) => {
-        btn.classList.remove('active');
-        btn.style.background = '#f0f0f0';
-        btn.style.color = '#333';
+    // トグルボタンの状態を更新
+    const toggleContainer = document.getElementById('game-type-toggle');
+    const btns = toggleContainer.querySelectorAll('.toggle-btn');
+    const slider = toggleContainer.querySelector('.toggle-btn-slider');
+    
+    btns.forEach((btn, index) => {
+        if ((index === 0 && type === 'navigation') || (index === 1 && type === 'guessing')) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
     });
     
-    // 選択されたボタンをアクティブにする
-    const activeIndex = type === 'navigation' ? 0 : 1;
-    typeBtns[activeIndex].classList.add('active');
-    typeBtns[activeIndex].style.background = 'linear-gradient(135deg, #6e8efb, #a777e3)';
-    typeBtns[activeIndex].style.color = 'white';
+    // スライダーを移動
+    if (type === 'navigation') {
+        slider.style.transform = 'translateX(0)';
+    } else {
+        slider.style.transform = 'translateX(100%)';
+    }
     
     // UI要素の表示/非表示を切り替え
     if (type === 'navigation') {
@@ -263,6 +481,7 @@ function setGameType(type) {
         document.getElementById('guessing-target').classList.add('hidden');
         document.getElementById('answer-form').classList.add('hidden');
         document.getElementById('difficulty-selection').classList.add('hidden');
+        document.querySelector('.progress-indicator').classList.remove('hidden');
     } else {
         document.getElementById('moves').classList.add('hidden');
         document.getElementById('guess-count').classList.remove('hidden');
@@ -270,6 +489,7 @@ function setGameType(type) {
         document.getElementById('guessing-target').classList.remove('hidden');
         document.getElementById('answer-form').classList.remove('hidden');
         document.getElementById('difficulty-selection').classList.remove('hidden');
+        document.querySelector('.progress-indicator').classList.add('hidden');
     }
     
     // 現在のゲームが進行中なら再スタート
@@ -282,36 +502,50 @@ function setGameType(type) {
 function setDifficulty(newDifficulty) {
     difficulty = newDifficulty;
     
-    // ボタンの見た目を更新
-    const difficultyBtns = document.querySelectorAll('.difficulty-btn');
-    difficultyBtns.forEach(btn => {
-        btn.classList.remove('active');
-        btn.style.background = '#f0f0f0';
-        btn.style.color = '#333';
+    // 難易度に応じて想定移動回数を調整
+    switch(newDifficulty) {
+        case 'easy':
+            expectedMoveCount = 5;
+            break;
+        case 'medium':
+            expectedMoveCount = 8;
+            break;
+        case 'hard':
+            expectedMoveCount = 12;
+            break;
+    }
+    
+    // トグルボタンの状態を更新
+    const difficultyContainer = document.getElementById('difficulty-selection').querySelector('.toggle-btn-group');
+    const btns = difficultyContainer.querySelectorAll('.toggle-btn');
+    const slider = difficultyContainer.querySelector('.toggle-btn-slider');
+    
+    btns.forEach((btn, index) => {
+        const difficulties = ['easy', 'medium', 'hard'];
+        if (difficulties[index] === newDifficulty) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
     });
     
-    // 選択されたボタンをアクティブにする
+    // スライダーを移動
     const difficulties = ['easy', 'medium', 'hard'];
     const activeIndex = difficulties.indexOf(newDifficulty);
-    if (activeIndex !== -1) {
-        difficultyBtns[activeIndex].classList.add('active');
-        
-        // 難易度に応じて色を変える
-        let gradientColor;
-        switch (newDifficulty) {
-            case 'easy':
-                gradientColor = 'linear-gradient(135deg, #55efc4, #00cec9)';
-                break;
-            case 'medium':
-                gradientColor = 'linear-gradient(135deg, #fdcb6e, #e17055)';
-                break;
-            case 'hard':
-                gradientColor = 'linear-gradient(135deg, #e84393, #fd79a8)';
-                break;
-        }
-        
-        difficultyBtns[activeIndex].style.background = gradientColor;
-        difficultyBtns[activeIndex].style.color = 'white';
+    slider.style.transform = `translateX(${activeIndex * 100}%)`;
+    slider.style.width = `${100/difficulties.length}%`;
+    
+    // 色を変更
+    switch (newDifficulty) {
+        case 'easy':
+            slider.style.background = 'linear-gradient(135deg, #55efc4, #00cec9)';
+            break;
+        case 'medium':
+            slider.style.background = 'linear-gradient(135deg, #fdcb6e, #e17055)';
+            break;
+        case 'hard':
+            slider.style.background = 'linear-gradient(135deg, #e84393, #fd79a8)';
+            break;
     }
     
     // ページ名当てモードで現在ゲーム中なら再スタート
@@ -433,8 +667,8 @@ function showWrongAnswerToast() {
             
             // モーダルの内容を更新
             document.getElementById('final-moves').textContent = moveCount;
-            document.getElementById('start-page-name').textContent = decodeURIComponent(startUrl).split('/').pop();
-            document.getElementById('final-target-page').textContent = decodeURIComponent(targetUrl).split('/').pop();
+            document.getElementById('start-page-name').textContent = decodeURIComponent(startUrl).split('/').pop().replace(/_/g, ' ');
+            document.getElementById('final-target-page').textContent = decodeURIComponent(targetUrl).split('/').pop().replace(/_/g, ' ');
 
             // 履歴表示
             updateGameHistory();
@@ -462,7 +696,7 @@ function showWrongAnswerToast() {
             const historyList = document.createElement('ol');
             gamePath.forEach(page => {
                 const item = document.createElement('li');
-                item.textContent = decodeURIComponent(page).split('/').pop();
+                item.textContent = decodeURIComponent(page).split('/').pop().replace(/_/g, ' ');
                 historyList.appendChild(item);
             });
             
@@ -471,10 +705,10 @@ function showWrongAnswerToast() {
 
         function saveGameResult() {
             const result = {
-                startPage: decodeURIComponent(startUrl).split('/').pop(),
-                targetPage: decodeURIComponent(targetUrl).split('/').pop(),
+                startPage: decodeURIComponent(startUrl).split('/').pop().replace(/_/g, ' '),
+                targetPage: decodeURIComponent(targetUrl).split('/').pop().replace(/_/g, ' '),
                 moves: moveCount,
-                path: gamePath.map(url => decodeURIComponent(url).split('/').pop()),
+                path: gamePath.map(url => decodeURIComponent(url).split('/').pop().replace(/_/g, ' ')),
                 date: new Date().toLocaleString()
             };
             
@@ -720,24 +954,46 @@ function showWrongAnswerToast() {
         // ゲームモード切り替え
         function showSinglePlayer() {
             // シングルプレイヤーモードを表示（すでに表示されている）
-            const modeBtns = document.querySelectorAll('.mode-btn');
-            modeBtns.forEach(btn => btn.classList.remove('active'));
-            modeBtns[0].classList.add('active');
-            modeBtns[0].style.background = 'linear-gradient(135deg, #6e8efb, #a777e3)';
-            modeBtns[0].style.color = 'white';
-            modeBtns[1].style.background = '#f0f0f0';
-            modeBtns[1].style.color = '#333';
+            // トグルスライダーを初期位置に
+            const playModeContainer = document.querySelector('.toggle-btn-group');
+            const btns = playModeContainer.querySelectorAll('.toggle-btn');
+            const slider = playModeContainer.querySelector('.toggle-btn-slider');
+            
+            btns[0].classList.add('active');
+            btns[1].classList.remove('active');
+            slider.style.transform = 'translateX(0)';
         }
+        
+        // ページ読み込み時にトグルボタングループを初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            // すべてのトグルボタングループのスライダーを初期化
+            const toggleGroups = document.querySelectorAll('.toggle-btn-group');
+            
+            toggleGroups.forEach(group => {
+                const slider = group.querySelector('.toggle-btn-slider');
+                const btns = group.querySelectorAll('.toggle-btn');
+                
+                // スライダーの幅を設定
+                slider.style.width = `${100/btns.length}%`;
+                
+                // トグルボタンのサイズに応じて調整するために表示後に再計算
+                setTimeout(() => {
+                    const activeBtn = group.querySelector('.toggle-btn.active');
+                    if (activeBtn) {
+                        const index = Array.from(btns).indexOf(activeBtn);
+                        slider.style.transform = `translateX(${index * 100}%)`;
+                    }
+                }, 0);
+            });
+            
+            // Enterキーで回答を送信できるようにする（アクセシビリティ向上）
+            document.getElementById('answer-input').addEventListener('keyup', function(event) {
+                if (event.key === 'Enter') {
+                    checkAnswer();
+                }
+            });
+        });
     </script>
-    
-    <style>
-        .mode-btn.active {
-            background: linear-gradient(135deg, #6e8efb, #a777e3) !important;
-            color: white !important;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            transform: translateY(-2px);
-        }
-    </style>
 </body>
 
 </html>

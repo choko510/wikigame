@@ -798,6 +798,7 @@
         let timerInterval = null;
 
         let currentRoomPlayerInfos = {};
+        let latestGameState = null; // ★ 1. グローバル変数の追加
 
         // 画面要素のキャッシュ (DOMContentLoaded後が良いが、グローバルでアクセスするためここで宣言)
         let usernameScreen, lobbyScreen, roomScreen, gameScreen, resultsModal;
@@ -1078,6 +1079,10 @@
                     (data.game_state && data.game_state.player_states
                         ? Object.fromEntries(Object.entries(data.game_state.player_states).map(([pid, state]) => [pid, { username: state.username, id: pid }]))
                         : {});
+
+                // ★ 2. latestGameState の更新
+                if (data.game_state) latestGameState = data.game_state;
+
                 startGame(data);
 
                 const gameHeaderStats = document.querySelector('.game-header .game-stats');
@@ -1101,7 +1106,11 @@
             });
 
             socket.on('player_eliminated', data => {
-                if (data.game_state) updateAllPlayersProgress(data.game_state);
+                // ★ 2. latestGameState の更新
+                if (data.game_state) {
+                    latestGameState = data.game_state;
+                    updateAllPlayersProgress(data.game_state);
+                }
 
                 const eliminatedPlayerInfo = currentRoomPlayerInfos[data.player_id];
                 const playerName = eliminatedPlayerInfo ? eliminatedPlayerInfo.username : `プレイヤー (${data.player_id.substring(0, 4)}...)`;
@@ -1116,28 +1125,31 @@
             });
 
             socket.on('player_moved', data => {
-                // 変更点: 自分の移動回数はサーバーからの情報で直接更新
                 if (data.player_id === playerId) {
-                    moveCount = data.moves; // UI表示用
+                    moveCount = data.moves;
                     currentPage = data.url;
                     gamePath.push(data.url);
-                    updateStats(); // UIの移動回数表示を更新
+                    updateStats();
                 }
-                // 全プレイヤーの進捗リストは game_state に基づいて更新
+                // ★ 2. latestGameState の更新
                 if (data.game_state) {
+                    latestGameState = data.game_state;
                     updateAllPlayersProgress(data.game_state);
                 }
             });
 
             socket.on('player_finished', data => {
-                playerFinished(data); // 改善点: この関数内で詳細処理
+                // ★ 2. latestGameState の更新
+                if (data.game_state) latestGameState = data.game_state;
+                playerFinished(data);
             });
 
             socket.on('game_finished', data => {
                 if (timerInterval) clearInterval(timerInterval);
+                latestGameState = null; // ゲーム終了時はリセット
                 showResults(data);
-                hideGoalNotification(); // 改善点: ゴール通知を隠す
-                if (iframeOverlay) iframeOverlay.style.display = 'none'; // オーバーレイ解除
+                hideGoalNotification();
+                if (iframeOverlay) iframeOverlay.style.display = 'none';
             });
 
             socket.on('player_left', data => {
@@ -1145,6 +1157,8 @@
                     currentRoomPlayerInfos = data.room_info.player_info || {};
                     updateRoomInfo(data.room_info);
                 }
+                // ゲーム中に誰かが抜けた場合、最新のゲーム状態も更新されるべき (サーバー側で送信されていれば)
+                if (data.game_state) latestGameState = data.game_state;
             });
 
             socket.on('left_room', () => {
@@ -1152,6 +1166,7 @@
                 roomId = null;
                 isHost = false;
                 currentRoomPlayerInfos = {};
+                latestGameState = null; // ロビーに戻ったらリセット
                 loadAvailableRooms();
             });
 
@@ -1163,9 +1178,10 @@
                     if (!resultsModal.classList.contains('hidden')) resultsModal.classList.add('hidden');
 
                     currentRoomPlayerInfos = data.room_info.player_info || {};
+                    latestGameState = null; // ルームリセット時も
                     updateRoomInfo(data.room_info);
-                    hideGoalNotification(); // 改善点
-                    if (iframeOverlay) iframeOverlay.style.display = 'none'; // 改善点
+                    hideGoalNotification();
+                    if (iframeOverlay) iframeOverlay.style.display = 'none';
 
                     const toast = document.createElement('div');
                     toast.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); background-color:#e8f5e9; color:#2e7d32; padding:10px 20px; border-radius:5px; box-shadow:0 2px 4px rgba(0,0,0,0.2); font-weight:bold; z-index:9999;';
@@ -1184,11 +1200,13 @@
             socket.on('answer_result', data => {
                 guessCount = data.guess_count;
                 updateStats();
+                // ★ 2. latestGameState の更新 (サーバーが game_state を送ってくれば)
+                if (data.game_state) latestGameState = data.game_state;
+
                 if (data.is_correct) {
                     showCorrectAnswerDialog(data.correct_title);
-                    // 改善点: 正解したら次のページへ自動遷移 (サーバー側で次のページ情報を送る必要がある)
                     if (data.next_page_url) {
-                        navigateToPage(data.next_page_url, true); // trueはページ名当てモードの遷移であることを示すフラグ
+                        navigateToPage(data.next_page_url, true);
                     }
                 } else {
                     showWrongAnswerDialog();
@@ -1198,7 +1216,11 @@
                 const answeredPlayerInfo = currentRoomPlayerInfos[data.player_id];
                 const playerName = answeredPlayerInfo ? answeredPlayerInfo.username : `プレイヤー (${data.player_id.substring(0, 4)}...)`;
                 if (data.player_id !== playerId) showPlayerAnsweredToast(playerName);
-                if (data.game_state) updateAllPlayersProgress(data.game_state);
+                // ★ 2. latestGameState の更新
+                if (data.game_state) {
+                    latestGameState = data.game_state;
+                    updateAllPlayersProgress(data.game_state);
+                }
             });
         }
 
@@ -1373,18 +1395,21 @@
 
         function startGame(data) {
             switchScreen(roomScreen, gameScreen);
-            hideGoalNotification(); // 改善点: 前回のゲームの通知を消す
-            if (iframeOverlay) iframeOverlay.style.display = 'none'; // 改善点: オーバーレイ解除
+            hideGoalNotification();
+            if (iframeOverlay) iframeOverlay.style.display = 'none';
 
             startUrl = data.start_url;
             targetUrl = data.target_url;
             currentPage = startUrl;
-            moveCount = 0; // サーバーからの情報で更新されるが初期化
+            moveCount = 0;
             gamePath = [startUrl];
 
             gameStartTime = Date.now();
             if (timerInterval) clearInterval(timerInterval);
             timerInterval = setInterval(updateTimer, 1000);
+
+            // ★ 4. startGame で latestGameState を初期化 (socket.on('game_started')内でも良いが念のため)
+            if (data.game_state) latestGameState = data.game_state;
 
             document.getElementById('target-page-name').textContent = decodeURIComponent(targetUrl).split('/').pop();
 
@@ -1413,7 +1438,7 @@
                 guessCount = 0;
             }
 
-            updateStats(); // 初期表示
+            updateStats();
 
             let frameUrl = `/proxy?url=${encodeURIComponent(startUrl)}`;
             if (gameMode === 'guessing') {
@@ -1424,18 +1449,26 @@
             if (data.game_state) updateAllPlayersProgress(data.game_state);
         }
 
+        // ★ 3. updateTimer 関数の修正
         function updateTimer() {
-            if (!gameStartTime) return;
+            if (!gameStartTime || gameScreen.classList.contains('hidden')) { // ゲーム画面でない場合はタイマー更新をスキップ
+                if (timerInterval) clearInterval(timerInterval); // 安全のためクリア
+                return;
+            }
             const elapsedMs = Date.now() - gameStartTime;
             const elapsedSec = Math.floor(elapsedMs / 1000);
             const minutes = Math.floor(elapsedSec / 60);
             const seconds = elapsedSec % 60;
             document.getElementById('current-time').textContent = `経過時間: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            // プレイヤー進捗リストのタイマーも更新
+            if (latestGameState && !gameScreen.classList.contains('hidden')) { // ゲーム画面表示中のみ更新
+                updateAllPlayersProgress(latestGameState);
+            }
         }
 
+
         function updateStats() {
-            // 自分の移動回数は player_moved イベントで直接更新されるので、
-            // ここでは主にページ名当てモードの推測回数を更新
             if (roomSettings.game_mode === 'navigation') {
                 document.getElementById('game-moves').textContent = `移動回数: ${moveCount}`;
             } else if (roomSettings.game_mode === 'guessing') {
@@ -1445,6 +1478,7 @@
 
         function updateAllPlayersProgress(gameState) {
             const progressList = document.getElementById('player-progress-list');
+            if (!progressList) return; // 要素が存在しない場合は何もしない
             progressList.innerHTML = '';
             if (!gameState || !gameState.player_states) {
                 progressList.innerHTML = '<div style="padding: 15px; color: #777;">プレイヤーデータを読み込み中...</div>';
@@ -1458,7 +1492,8 @@
                 if (pid === playerId) cardClasses += ' current-player';
                 if (state.eliminated) cardClasses += ' eliminated';
                 playerCard.className = cardClasses;
-                playerCard.style.animationDelay = `${index * 0.1}s`;
+                // animationDelay は初回描画時のみ有効にしたいが、ここでは簡略化
+                // playerCard.style.animationDelay = `${index * 0.1}s`; 
 
                 const playerInfoDetail = currentRoomPlayerInfos[pid];
                 const rawPlayerName = playerInfoDetail ? playerInfoDetail.username : (state.username || `プレイヤー${pid.substr(0, 4)}`);
@@ -1480,9 +1515,9 @@
                 const playerMovesDiv = document.createElement('div');
                 playerMovesDiv.className = 'player-info-item';
                 const movesLabel = document.createElement('strong');
-                movesLabel.textContent = roomSettings.game_mode === 'guessing' ? '正解数: ' : '移動回数: '; // モードによってラベル変更も検討
+                movesLabel.textContent = roomSettings.game_mode === 'guessing' ? '正解数: ' : '移動回数: ';
                 playerMovesDiv.appendChild(movesLabel);
-                playerMovesDiv.appendChild(document.createTextNode(state.moves)); // moves はナビゲーションモードでは移動回数、ページ当てでは正解数など
+                playerMovesDiv.appendChild(document.createTextNode(state.moves));
                 playerCard.appendChild(playerMovesDiv);
 
                 const playerTimeDiv = document.createElement('div');
@@ -1492,7 +1527,8 @@
                 playerTimeDiv.appendChild(timeLabel);
                 let elapsedTime = '00:00';
                 if (gameState.started_at) {
-                    const startTime = gameState.started_at * 1000;
+                    const startTime = gameState.started_at * 1000; // Unix timestamp (seconds to ms)
+                    // state.finish_time も秒単位の Unix timestamp と仮定
                     const endTime = (state.finished && state.finish_time) ? state.finish_time * 1000 : Date.now();
                     const elapsedMs = endTime - startTime;
                     const elapsedSec = Math.floor(elapsedMs / 1000);
@@ -1506,24 +1542,20 @@
             });
         }
 
-        // 改善点: playerFinished 関数の処理を詳細化
         function playerFinished(data) {
-            if (data.game_state) updateAllPlayersProgress(data.game_state);
+            if (data.game_state) updateAllPlayersProgress(data.game_state); // これは最新の状態で更新
 
             const finishedPlayerInfo = currentRoomPlayerInfos[data.player_id];
             const playerName = finishedPlayerInfo ? finishedPlayerInfo.username : `プレイヤー (${data.player_id.substring(0, 4)}...)`;
 
             if (data.player_id === playerId) {
-                // 自分がゴールした場合
                 showGoalNotification(`🎉 目標達成！ 🎉`, `あなたは ${data.rank} 位です。他のプレイヤーの終了を待っています...`);
-                if (iframeOverlay) iframeOverlay.style.display = 'block'; // iframe操作不能に
+                if (iframeOverlay) iframeOverlay.style.display = 'block';
             } else {
-                // 他のプレイヤーがゴールした場合
                 showPlayerGoalToast(playerName, data.rank);
             }
         }
 
-        // 改善点: ゴール通知表示/非表示関数
         function showGoalNotification(mainMessage, subMessage = "") {
             if (goalNotification) {
                 document.getElementById('goal-notification-main-text').textContent = mainMessage;
@@ -1535,12 +1567,11 @@
             if (goalNotification) goalNotification.style.display = 'none';
         }
 
-        // 改善点: 他のプレイヤーがゴールした時のトースト
         function showPlayerGoalToast(playerName, rank) {
             const toast = document.createElement('div');
             toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background-color:#e8f5e9; color:#2e7d32; padding:12px 20px; border-radius:5px; box-shadow:0 4px 8px rgba(0,0,0,0.2); z-index:9999; max-width:300px; font-weight:bold; border:1px solid #a5d6a7; display:flex; align-items:center; animation:fadeIn 0.5s, fadeOut 0.5s 5s; animation-fill-mode:forwards;';
             const icon = document.createElement('span');
-            icon.innerHTML = '🏆'; // ゴールアイコン
+            icon.innerHTML = '🏆';
             icon.style.marginRight = '10px';
             icon.style.fontSize = '20px';
             const message = document.createElement('span');
@@ -1552,7 +1583,8 @@
         }
 
         function showResults(data) {
-            if (timerInterval) clearInterval(timerInterval); // タイマー停止
+            if (timerInterval) clearInterval(timerInterval);
+            latestGameState = null; // 結果表示時は不要
             const resultsTableBody = document.getElementById('results-table-body');
             resultsTableBody.innerHTML = '';
 
@@ -1569,7 +1601,7 @@
                 playerTd.textContent = `${result.username} ${result.player_id === playerId ? '(あなた)' : ''}${result.eliminated ? ' (脱落)' : ''}`;
                 if (result.eliminated) row.style.backgroundColor = '#ffebee';
                 const movesTd = document.createElement('td');
-                movesTd.textContent = `${result.moves}回`; // movesはモードにより意味が変わる可能性
+                movesTd.textContent = `${result.moves}回`;
                 const timeTd = document.createElement('td');
                 timeTd.textContent = timeTaken;
                 const pathTd = document.createElement('td');
@@ -1582,7 +1614,6 @@
             });
 
             const modalContent = resultsModal.querySelector('.modal-content');
-            // 古いボタンコンテナがあれば削除
             const oldActionButtonsContainer = modalContent.querySelector('div.action-buttons-container');
             if (oldActionButtonsContainer) oldActionButtonsContainer.remove();
 
@@ -1594,7 +1625,7 @@
             resetGameBtn.className = 'btn'; resetGameBtn.style.backgroundColor = '#4CAF50';
             resetGameBtn.textContent = '新しいゲームを始める'; resetGameBtn.onclick = resetGame;
 
-            const backToLobbyBtnClone = document.createElement('button'); // document.getElementById('back-to-lobby-btn') が存在しないため新規作成
+            const backToLobbyBtnClone = document.createElement('button');
             backToLobbyBtnClone.id = "back-to-lobby-btn-modal";
             backToLobbyBtnClone.className = "btn";
             backToLobbyBtnClone.textContent = "ロビーに戻る";
@@ -1668,7 +1699,7 @@
             const frame = document.getElementById('game-frame');
             try {
                 const frameDoc = frame.contentDocument || frame.contentWindow.document;
-                if (!frameDoc) return; // クロスオリジンなどでアクセスできない場合
+                if (!frameDoc) return;
 
                 Array.from(frameDoc.getElementsByTagName('script')).forEach(script => script.remove());
 
@@ -1676,9 +1707,8 @@
                     frame.contentWindow.addEventListener('keydown', function (e) {
                         if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
                             e.preventDefault();
-                            if (!ctrlFWarningShown) { // このフラグはiframe内ではなくグローバルで管理
+                            if (!ctrlFWarningShown) {
                                 socket.emit('ctrl_f_violation');
-                                // showCtrlFViolationDialog(); // 違反ダイアログはグローバルハンドラで表示
                             }
                         }
                     });
@@ -1687,7 +1717,6 @@
                 Array.from(frameDoc.getElementsByTagName('a')).forEach(link => {
                     link.addEventListener('click', async function (e) {
                         e.preventDefault();
-                        // 改善点: iframeOverlayが表示されている（ゴール後など）はクリックを無視
                         if (iframeOverlay && iframeOverlay.style.display === 'block') return;
 
                         const href = this.getAttribute('href');
@@ -1709,24 +1738,19 @@
                 frameDoc.head.appendChild(style);
             } catch (e) {
                 console.warn('フレーム処理エラー (クロスオリジンの可能性):', e);
-                // クロスオリジンエラーの場合、proxy経由でもアクセスできないことがある
-                // この場合、ゲームロジックに影響が出る可能性がある
             }
         }
 
-        // 改善点: isGuessingModeNextPage 引数を追加
         async function navigateToPage(clickedUrl, isGuessingModeNextPage = false) {
-            // ページ名当てモードで正解後の自動遷移の場合は、player_move イベントは送信しない
             if (!(roomSettings.game_mode === 'guessing' && isGuessingModeNextPage)) {
                 socket.emit('player_move', { url: clickedUrl });
             }
 
             let frameUrl = `/proxy?url=${encodeURIComponent(clickedUrl)}`;
             if (roomSettings.game_mode === 'guessing') {
-                frameUrl += `&mode=guessing&room_id=${roomId}`; // 常にguessingモードのパラメータを付与
+                frameUrl += `&mode=guessing&room_id=${roomId}`;
             }
             document.getElementById('game-frame').src = frameUrl;
-            // currentPageの更新は 'player_moved' イベントまたは 'answer_result' の正解時などに任せる
         }
 
         function isValidWikipediaArticle(url) {
@@ -1781,9 +1805,7 @@
             rModalContent.classList.remove('fade-in'); rModalContent.classList.add('fade-out');
             setTimeout(() => {
                 resultsModal.classList.add('hidden'); rModalContent.classList.remove('fade-out');
-                // switchScreen(gameScreen, roomScreen); // これは room_reset イベントで処理
                 socket.emit('reset_room', { room_id: roomId });
-                // ホスト以外の準備状態リセットはサーバーからの room_reset イベントで player_info が更新されることで対応
             }, parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--transition-speed')) * 1000 || 500);
         }
 
@@ -1809,7 +1831,7 @@
             const buttonDiv = document.createElement('div');
             buttonDiv.style.textAlign = 'center';
             const okButton = document.createElement('button');
-            okButton.className = 'btn'; okButton.textContent = 'OK'; // 「次へ」だと自動遷移と被るので「OK」
+            okButton.className = 'btn'; okButton.textContent = 'OK';
             okButton.style.backgroundColor = '#4caf50'; okButton.onclick = () => dialog.remove();
             buttonDiv.appendChild(okButton); content.appendChild(title); content.appendChild(message); content.appendChild(buttonDiv);
             dialog.appendChild(content); document.body.appendChild(dialog);

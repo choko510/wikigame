@@ -1,0 +1,2009 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Wikipedia オンライン対戦</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/common_styles.css') }}">
+    <style>
+        /* ユーザー名入力画面 */
+        #username-screen h2 {
+            margin-bottom: 20px;
+            /* h2と入力欄の間のマージン調整 */
+        }
+
+        #username-screen input[type="text"] {
+            margin-bottom: 15px;
+            /* 入力欄とボタンの間のマージン調整 */
+        }
+
+        /* ロビー画面 */
+        #lobby-screen {
+            width: 100%;
+        }
+
+        #lobby-screen .card h2,
+        #lobby-screen .card h3 {
+            margin-bottom: 15px;
+        }
+
+        #lobby-screen .card hr {
+            margin: 25px 0;
+            /* 水平線のマージン調整 */
+            border: none;
+            border-top: 1px solid #eee;
+        }
+
+        .rooms-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .room-card {
+            background-color: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 20px;
+            /* 少しパディングを増やす */
+            transition: all var(--transition-speed) ease;
+            cursor: pointer;
+            border: 1px solid #e0e0e0;
+            /* 通常時のボーダーを薄く表示 */
+            opacity: 0;
+            transform: translateY(20px);
+            animation: item-fade-in 0.5s ease forwards;
+            display: flex;
+            flex-direction: column;
+            /* 要素を縦に並べる */
+            justify-content: space-between;
+            /* 要素間のスペースを均等に */
+            min-height: 150px;
+            /* カードの最小高さを設定 */
+        }
+
+        .room-card:hover {
+            transform: translateY(-3px);
+            /* ホバー時の移動量を少し減らす */
+            border-color: var(--primary-color);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+            /* ホバー時の影を少し強調 */
+        }
+
+        .room-card h3 {
+            margin-bottom: 12px;
+            /* マージン調整 */
+            font-size: 1.25em;
+            /* フォントサイズ調整 */
+            color: var(--primary-color);
+        }
+
+        .room-card .room-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto;
+            /* 下部に配置 */
+            padding-top: 10px;
+            /* 上の要素との間にスペース */
+            border-top: 1px solid #f0f0f0;
+            /* 区切り線 */
+        }
+
+        .room-card .status-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .room-card .status-badge.waiting {
+            background-color: #e8f5e9;
+            /* 薄い緑 */
+            color: #388e3c;
+        }
+
+        .room-card .status-badge.playing {
+            background-color: #fff3e0;
+            /* 薄いオレンジ */
+            color: #f57c00;
+        }
+
+        .room-card .players {
+            font-size: 0.9em;
+            color: #555;
+            font-weight: 500;
+        }
+
+        /* ルーム画面 */
+        #room-screen {
+            width: 100%;
+        }
+
+        .players-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .player-item {
+            display: flex;
+            align-items: center;
+            background-color: var(--card-bg-light);
+            /* Slightly lighter card background */
+            padding: 12px 15px;
+            /* Adjust padding */
+            border-radius: var(--border-radius);
+            min-width: 220px;
+            /* Adjust min-width */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: all var(--transition-speed) ease;
+        }
+
+        .player-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .player-item .username {
+            flex: 1;
+            font-weight: bold;
+        }
+
+        .player-item .status {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .status.ready {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .status.not-ready {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .status.host {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        #target-url-setting {
+            /* ホスト専用設定エリアのスタイル */
+            background-color: var(--card-bg-light, #f9f9f9);
+            /* --card-bg-light が未定義の場合のフォールバック */
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-top: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+        }
+
+        #target-url-setting h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            color: var(--primary-color);
+        }
+
+        #target-url-setting input[type="text"],
+        #target-url-setting select {
+            margin-bottom: 10px;
+        }
+
+        .room-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            /* ボタンが複数行になる場合に対応 */
+            justify-content: center;
+            /* ボタンを中央揃え */
+        }
+
+        /* ゲーム画面 */
+        #game-screen {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            /* 改善点: ゴール通知の基準にするため */
+        }
+
+        .game-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 12px 20px;
+            /* パディング調整 */
+            border-radius: var(--border-radius);
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            /* ヘッダー内の要素間のギャップ */
+        }
+
+        .game-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 20px;
+            /* ギャップ調整 (行間 縦) */
+            align-items: center;
+        }
+
+        .game-stat {
+            font-weight: 600;
+            /* Poppins semi-bold */
+            text-shadow: none;
+            /* クリーンな見た目に */
+            font-size: 0.9em;
+        }
+
+        .game-stat strong {
+            /* 目標ページ名などを強調 */
+            font-weight: 700;
+            color: #ffdd57;
+            /* 強調色 (例: 黄色系) */
+        }
+
+        .game-header-controls {
+            /* 回答フォームとプレイヤー表示ボタンのコンテナ */
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #answer-form input[type="text"] {
+            margin-bottom: 0;
+            /* ヘッダー内ではマージン不要に */
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            /* 共通スタイルに合わせるか、ここで指定 */
+        }
+
+        #answer-form #submit-answer-btn {
+            /* IDで直接指定 */
+            padding: 8px 12px;
+        }
+
+        .game-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            position: relative;
+            /* 改善点: iframe操作無効化オーバーレイの基準 */
+        }
+
+        #game-frame {
+            flex: 1;
+            border: none;
+        }
+
+        /* 改善点: iframe操作無効化用オーバーレイ */
+        #iframe-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.1);
+            /* 少し暗くして操作不能を視覚的に示す */
+            z-index: 10;
+            /* iframeより手前 */
+            display: none;
+            /* 通常は非表示 */
+        }
+
+        /* プレイヤーリスト (サイドバー) */
+        .sidebar {
+            width: 320px;
+            /* 少し幅を広げる */
+            background-color: var(--card-bg-light, #f9f9f9);
+            /* 他の補助的背景と合わせる */
+            border-left: 1px solid #e0e0e0;
+            padding: 20px;
+            /* パディング調整 */
+            overflow-y: auto;
+            box-shadow: -2px 0 5px rgba(0, 0, 0, 0.05);
+            /* 左側に影を追加 */
+        }
+
+        .sidebar h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            color: var(--primary-color);
+        }
+
+        .player-card {
+            background-color: var(--card-bg);
+            padding: 12px 15px;
+            border-radius: var(--border-radius);
+            margin-bottom: 12px;
+            border: 1px solid #e0e0e0;
+            transition: all var(--transition-speed) ease, background-color 0.5s ease;
+            opacity: 0;
+            transform: translateX(-20px);
+            animation: player-card-enter 0.5s ease forwards;
+            box-shadow: var(--box-shadow);
+        }
+
+        @keyframes player-card-enter {
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .player-card .player-name {
+            font-weight: 600;
+            /* Poppins semi-bold */
+            margin-bottom: 8px;
+            /* マージン調整 */
+            font-size: 1.05em;
+            color: var(--text-color);
+        }
+
+        .player-card .player-name .status-text {
+            /* (あなた) (脱落) (✓) のスタイル */
+            font-weight: normal;
+            font-size: 0.9em;
+            color: #777;
+        }
+
+        .player-card .player-info-item {
+            /* 移動回数や現在のページなどの情報アイテム */
+            font-size: 0.85em;
+            color: #555;
+            margin-bottom: 4px;
+        }
+
+        .player-card .player-info-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .player-card .player-info-item strong {
+            /* ラベル部分 (例: "移動回数:") */
+            font-weight: 600;
+            color: #333;
+        }
+
+        .player-card.finished {
+            background-color: #e6ffed;
+            /* より明るい緑 */
+            border-color: #5cb85c;
+            /* 少し濃い緑のボーダー */
+        }
+
+        .player-card.finished .player-name {
+            color: #1e7e34;
+            /* ゴールしたプレイヤーの名前の色 */
+        }
+
+        .player-card.current-player {
+            border-color: var(--primary-color);
+            background-color: #e9efff;
+            /* より明るい青 */
+            box-shadow: 0 0 8px rgba(var(--primary-color-rgb), 0.3);
+            /* プライマリカラーのRGB値が必要 */
+        }
+
+        .player-card.eliminated {
+            background-color: #fff0f0;
+            /* 薄い赤 */
+            border-color: #f5c6cb;
+            /* やや濃い赤のボーダー */
+            opacity: 0.7;
+            /* 少し透明にする */
+        }
+
+        .player-card.eliminated .player-name,
+        .player-card.eliminated .player-info-item {
+            color: #721c24;
+            /* 脱落者のテキスト色 */
+            text-decoration: line-through;
+            /* 取り消し線 */
+        }
+
+        /* 改善点: ゴール通知メッセージのスタイル */
+        #goal-notification {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(46, 204, 113, 0.9);
+            /* 明るい緑、少し透明 */
+            color: white;
+            padding: 30px 40px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            z-index: 100;
+            /* iframeより手前、モーダルより奥 */
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            display: none;
+            /* 通常は非表示 */
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        #goal-notification p {
+            margin: 0;
+        }
+
+        #goal-notification .sub-message {
+            font-size: 0.7em;
+            margin-top: 10px;
+            font-weight: normal;
+        }
+
+        /* 結果モーダル */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            max-width: 600px;
+            width: 90%;
+            text-align: center;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .leaderboard {
+            width: 100%;
+            margin: 25px 0;
+            /* マージン調整 */
+            border-collapse: collapse;
+            border-radius: var(--border-radius);
+            /* テーブル全体に角丸 */
+            overflow: hidden;
+            /* 角丸を有効にするため */
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            /* 軽い影 */
+        }
+
+        .leaderboard th,
+        .leaderboard td {
+            padding: 12px 15px;
+            /* パディング調整 */
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+            /* ボーダー色調整 */
+        }
+
+        .leaderboard th {
+            background-color: var(--primary-color);
+            /* プライマリカラー背景 */
+            color: white;
+            font-weight: 600;
+            /* Poppins semi-bold */
+            font-size: 0.95em;
+            text-transform: uppercase;
+            /* 大文字化 */
+            letter-spacing: 0.5px;
+        }
+
+        .leaderboard td {
+            font-size: 0.9em;
+        }
+
+        .leaderboard tr:last-child td {
+            border-bottom: none;
+            /* 最後の行のボーダーを消す */
+        }
+
+        /* 上位3位のスタイル */
+        .leaderboard tr.rank-1 td {
+            background-color: #fff3cd;
+            /* 淡い金色 */
+            color: #664d03;
+            font-weight: 600;
+        }
+
+        .leaderboard tr.rank-2 td {
+            background-color: #f0f0f0;
+            /* 淡い銀色 */
+            color: #495057;
+        }
+
+        .leaderboard tr.rank-3 td {
+            background-color: #ffe8d1;
+            /* 淡い銅色 */
+            color: #723c09;
+        }
+
+        .rank {
+            /* 順位セルのスタイル */
+            font-weight: 700;
+            /* Poppins bold */
+            width: 50px;
+            /* 幅調整 */
+            text-align: center;
+            font-size: 1.1em;
+            /* 少し大きく */
+        }
+
+        .leaderboard tr.rank-1 .rank {
+            color: #b38600;
+            /* 金色の順位 */
+        }
+
+        .leaderboard tr.rank-2 .rank {
+            color: #6c757d;
+            /* 銀色の順位 */
+        }
+
+        .leaderboard tr.rank-3 .rank {
+            color: #a0522d;
+            /* 銅色の順位 */
+        }
+
+        .confetti {
+            position: absolute;
+            /* 親要素（.modal-content）に対して絶対配置 */
+            width: 10px;
+            height: 20px;
+            /* animation プロパティはJS側で設定 */
+            z-index: 1001;
+            /* モーダルのコンテンツより手前に表示 */
+        }
+
+        @keyframes confetti-fall {
+            0% {
+                transform: translateY(-10vh) rotate(0deg);
+                /* 初期位置をビューポートの上端より少し上にする */
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(110vh) rotate(720deg);
+                /* 終了位置をビューポートの下端より少し下にする */
+                opacity: 0;
+            }
+        }
+
+        /* 検索サジェスト */
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .suggestion-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s ease;
+        }
+
+        .suggestion-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-title {
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 2px;
+        }
+
+        .suggestion-url {
+            font-size: 0.8em;
+            color: #666;
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Wikipedia オンライン対戦</h1>
+
+        <!-- ユーザー名入力画面 -->
+        <div id="username-screen" class="card">
+            <h2>ユーザー名を入力してください</h2>
+            <input type="text" id="username-input" placeholder="ユーザー名">
+            <button id="submit-username" class="btn">参加する</button>
+        </div>
+
+        <!-- ロビー画面 -->
+        <div id="lobby-screen" class="hidden">
+            <div class="card">
+                <h2>ルームを作成または参加</h2>
+                <button id="create-room-btn" class="btn">新しいルームを作成</button>
+                <hr style="margin: 20px 0; opacity: 0.2;">
+                <h3>利用可能なルーム</h3>
+                <button id="refresh-rooms-btn" class="btn" style="margin-bottom: 10px;">更新</button>
+                <div id="rooms-list" class="rooms-container">
+                    <!-- ルームが動的に追加されます -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ルーム画面 -->
+        <div id="room-screen" class="hidden">
+            <div class="card">
+                <h2>ルーム: <span id="room-name"></span></h2>
+                <div id="room-status"></div>
+                <div id="target-url-setting" class="hidden" style="margin-top: 15px;">
+                    <h3>ゲーム設定 (ホストのみ)</h3>
+                    <div id="target-url-input-section">
+                        <div style="position: relative;">
+                            <input type="text" id="room-target-search-input" placeholder="目標ページを検索（例：東京、富士山）"
+                                style="width: 100%; margin-bottom: 5px;">
+                            <div id="search-suggestions" class="search-suggestions hidden"></div>
+                        </div>
+                        <input type="text" id="room-target-url-input" placeholder="または直接Wikipedia URLを入力"
+                            style="margin-top: 10px;">
+                        <button id="set-target-url-btn" class="btn">目標を設定</button>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <label for="allow-ctrl-f-checkbox">
+                            <input type="checkbox" id="allow-ctrl-f-checkbox" checked> Ctrl+F (ページ内検索) を許可する
+                        </label>
+                        <div style="margin-top: 10px;">
+                            <label>ゲームモード: </label>
+                            <select id="game-mode-select" style="padding: 5px; border-radius: 4px;">
+                                <option value="navigation">目標ページに辿り着くモード</option>
+                                <option value="guessing">ページ名当てモード</option>
+                            </select>
+                        </div>
+                        <div id="difficulty-selection-multiplayer" class="hidden" style="margin-top: 10px;">
+                            <label>難易度: </label>
+                            <select id="difficulty-select" style="padding: 5px; border-radius: 4px;">
+                                <option value="easy">Easy</option>
+                                <option value="medium">Medium</option>
+                                <option value="hard">Hard</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <p>現在の目標ページ: <strong id="current-room-target-url">未設定</strong></p>
+
+                <h3>プレイヤー一覧</h3>
+                <div id="players-list" class="players-list">
+                    <!-- プレイヤーが動的に追加されます -->
+                </div>
+
+                <div class="room-controls">
+                    <button id="toggle-ready-btn" class="btn">準備完了</button>
+                    <button id="start-game-btn" class="btn" disabled>ゲーム開始</button>
+                    <button id="leave-room-btn" class="btn">ルームを退出</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ゲーム画面 -->
+        <div id="game-screen" class="hidden">
+            <div class="game-header">
+                <div class="game-stats">
+                    <div id="game-moves" class="game-stat">移動回数: 0</div>
+                    <div id="game-guess-count" class="game-stat hidden">推測回数: 0</div>
+                    <div id="game-mode-display" class="game-stat">モード: ナビゲーション</div>
+                    <div id="target-display" class="game-stat">
+                        <span id="navigation-target">目標のページ: <strong id="target-page-name">日本</strong></span>
+                        <span id="guessing-target" class="hidden">現在のページの名前を当ててください</span>
+                    </div>
+                    <div id="current-time" class="game-stat">経過時間: 00:00</div>
+                </div>
+                <div class="game-header-controls">
+                    <button id="view-players-btn" class="btn btn-small"
+                        style="padding: 8px 12px; display: none;">プレイヤー表示</button>
+                    <button id="give-up-btn" class="btn btn-small"
+                        style="padding: 8px 12px; background-color: #f44336; color: white; display: none;">ギブアップ</button>
+                    <div id="answer-form" class="hidden" style="display: flex; gap: 5px;">
+                        <input type="text" id="answer-input" placeholder="ページ名を入力">
+                        <button id="submit-answer-btn" class="btn">回答</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="game-container">
+                <iframe id="game-frame" src=""></iframe>
+                <!-- 改善点: iframe操作無効化用オーバーレイ -->
+                <div id="iframe-overlay"></div>
+                <div id="players-sidebar" class="sidebar">
+                    <h3>プレイヤー進捗</h3>
+                    <div id="player-progress-list">
+                        <!-- プレイヤー進捗が動的に追加されます -->
+                    </div>
+                </div>
+            </div>
+            <!-- 改善点: ゴール通知メッセージ -->
+            <div id="goal-notification">
+                <p id="goal-notification-main-text"></p>
+                <p id="goal-notification-sub-text" class="sub-message"></p>
+            </div>
+        </div>
+
+        <!-- 結果モーダル -->
+        <div id="results-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>ゲーム結果</h2>
+                <table class="leaderboard">
+                    <thead>
+                        <tr>
+                            <th>順位</th>
+                            <th>プレイヤー</th>
+                            <th>移動回数</th>
+                            <th>タイム</th>
+                            <th>ルート</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-table-body">
+                        <!-- 結果が動的に追加されます -->
+                    </tbody>
+                </table>
+                <!-- ボタンは showResults で動的に追加されるように変更済み -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ソケット接続
+        let socket;
+        let playerId;
+        let roomId;
+        let isHost = false;
+        let username = '';
+        let moveCount = 0; // UI表示用。実質的なカウントはサーバー。
+        let guessCount = 0;
+        let startUrl = '';
+        let targetUrl = '';
+        let currentPage = '';
+        let gamePath = [];
+        let roomSettings = {
+            allow_ctrl_f: true,
+            game_mode: 'navigation'
+        };
+        let ctrlFWarningShown = false;
+        let gameStartTime = 0;
+        let timerInterval = null;
+
+        let currentRoomPlayerInfos = {};
+        let latestGameState = null; // ★ 1. グローバル変数の追加
+
+        // 画面要素のキャッシュ (DOMContentLoaded後が良いが、グローバルでアクセスするためここで宣言)
+        let usernameScreen, lobbyScreen, roomScreen, gameScreen, resultsModal;
+        let goalNotification, iframeOverlay; // 改善点: 新しいUI要素
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 画面要素のキャッシュ
+            usernameScreen = document.getElementById('username-screen');
+            lobbyScreen = document.getElementById('lobby-screen');
+            roomScreen = document.getElementById('room-screen');
+            gameScreen = document.getElementById('game-screen');
+            resultsModal = document.getElementById('results-modal');
+            goalNotification = document.getElementById('goal-notification'); // 改善点
+            iframeOverlay = document.getElementById('iframe-overlay'); // 改善点
+
+            setupGlobalCtrlFDetection();
+
+            // ユーザー名入力
+            document.getElementById('submit-username').addEventListener('click', function () {
+                username = document.getElementById('username-input').value.trim();
+                if (username) {
+                    initSocketConnection();
+                    switchScreen(usernameScreen, lobbyScreen);
+                    loadAvailableRooms();
+                } else {
+                    alert('ユーザー名を入力してください');
+                }
+            });
+
+            // ロビー操作ボタン
+            document.getElementById('create-room-btn').addEventListener('click', function () {
+                socket.emit('create_room', { username: username });
+            });
+            document.getElementById('refresh-rooms-btn').addEventListener('click', function () {
+                loadAvailableRooms();
+            });
+
+            // ルーム操作ボタン
+            document.getElementById('toggle-ready-btn').addEventListener('click', function () {
+                socket.emit('toggle_ready');
+            });
+            document.getElementById('start-game-btn').addEventListener('click', function () {
+                socket.emit('start_game');
+            });
+            document.getElementById('leave-room-btn').addEventListener('click', function () {
+                socket.emit('leave_room_request');
+            });
+
+            // ホスト設定
+            document.getElementById('set-target-url-btn').addEventListener('click', function () {
+                let newTargetUrl = document.getElementById('room-target-url-input').value.trim();
+                if (!newTargetUrl) {
+                    const searchQuery = document.getElementById('room-target-search-input').value.trim();
+                    if (searchQuery) {
+                        alert('検索結果から選択するか、直接URLを入力してください。');
+                        return;
+                    }
+                }
+                if (!newTargetUrl || !isValidWikipediaArticle(newTargetUrl)) {
+                    alert('有効なWikipediaの目標ページURLを入力してください。');
+                    return;
+                }
+                if (roomId) {
+                    socket.emit('set_target_url', { room_id: roomId, target_url: newTargetUrl });
+                }
+            });
+            document.getElementById('allow-ctrl-f-checkbox').addEventListener('change', function () {
+                if (isHost && roomId) {
+                    socket.emit('update_room_settings', {
+                        room_id: roomId,
+                        settings: { allow_ctrl_f: this.checked }
+                    });
+                }
+            });
+            document.getElementById('game-mode-select').addEventListener('change', function () {
+                const gameMode = this.value;
+                const difficultySelection = document.getElementById('difficulty-selection-multiplayer');
+                const targetUrlSection = document.getElementById('target-url-input-section');
+                if (gameMode === 'guessing') {
+                    difficultySelection.classList.remove('hidden');
+                    targetUrlSection.classList.add('hidden');
+                } else {
+                    difficultySelection.classList.add('hidden');
+                    targetUrlSection.classList.remove('hidden');
+                }
+                if (isHost && roomId) {
+                    const settings = { game_mode: gameMode };
+                    if (gameMode === 'guessing') {
+                        settings.difficulty = document.getElementById('difficulty-select').value;
+                    }
+                    socket.emit('update_room_settings', { room_id: roomId, settings: settings });
+                }
+            });
+            document.getElementById('difficulty-select').addEventListener('change', function () {
+                if (isHost && roomId) {
+                    socket.emit('update_room_settings', {
+                        room_id: roomId,
+                        settings: { difficulty: this.value }
+                    });
+                }
+            });
+
+            // 検索サジェスト
+            const searchInput = document.getElementById('room-target-search-input');
+            const suggestionsDiv = document.getElementById('search-suggestions');
+            searchInput.addEventListener('input', function () {
+                const query = this.value.trim();
+                clearTimeout(searchTimeout);
+                if (query.length < 2) {
+                    suggestionsDiv.classList.add('hidden');
+                    return;
+                }
+                searchTimeout = setTimeout(() => { searchWikipedia(query); }, 300);
+            });
+            document.addEventListener('click', function (e) {
+                if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                    suggestionsDiv.classList.add('hidden');
+                }
+            });
+
+            // ゲーム画面操作
+            const viewPlayersBtn = document.getElementById('view-players-btn');
+            if (viewPlayersBtn) {
+                viewPlayersBtn.addEventListener('click', function () {
+                    document.getElementById('players-sidebar').classList.toggle('hidden');
+                });
+            }
+            
+            // ギブアップボタンのイベントリスナー
+            document.getElementById('give-up-btn').addEventListener('click', function () {
+                showGiveUpConfirmDialog();
+            });
+            document.getElementById('game-frame').addEventListener('load', handleFrameLoad);
+            document.getElementById('submit-answer-btn').addEventListener('click', submitAnswer);
+            document.getElementById('answer-input').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitAnswer();
+                }
+            });
+        });
+
+        function setupGlobalCtrlFDetection() {
+            document.addEventListener('keydown', function (e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                    if (gameScreen && !gameScreen.classList.contains('hidden') && roomSettings && !roomSettings.allow_ctrl_f) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!ctrlFWarningShown) {
+                            socket.emit('ctrl_f_violation');
+                            showCtrlFViolationDialog(); // 自分への警告
+                        }
+                        return false;
+                    }
+                }
+            });
+        }
+
+        function showCtrlFViolationDialog() {
+            ctrlFWarningShown = true;
+            const dialog = document.createElement('div');
+            dialog.className = 'modal';
+            dialog.style.zIndex = '2000';
+            const content = document.createElement('div');
+            content.className = 'modal-content';
+            content.style.maxWidth = '400px';
+            content.style.backgroundColor = '#ffebee';
+            content.style.border = '2px solid #e57373';
+            const title = document.createElement('h3');
+            title.textContent = '⚠️ページ内検索使用検出';
+            title.style.color = '#d32f2f';
+            const message = document.createElement('p');
+            message.textContent = 'このルームではページ内検索(Ctrl+F)は禁止されています。ルール違反により脱落となります。';
+            message.style.marginBottom = '20px';
+            const buttonDiv = document.createElement('div');
+            buttonDiv.style.textAlign = 'center';
+            const okButton = document.createElement('button');
+            okButton.className = 'btn';
+            okButton.textContent = '了解しました';
+            okButton.style.backgroundColor = '#d32f2f';
+            okButton.onclick = function () { dialog.remove(); };
+            buttonDiv.appendChild(okButton);
+            content.appendChild(title);
+            content.appendChild(message);
+            content.appendChild(buttonDiv);
+            dialog.appendChild(content);
+            document.body.appendChild(dialog);
+        }
+
+        function showCtrlFWarningDialogOnGameStart() {
+            const dialog = document.createElement('div');
+            dialog.className = 'modal';
+            dialog.style.zIndex = '1999';
+            const content = document.createElement('div');
+            content.className = 'modal-content';
+            content.style.maxWidth = '450px';
+            content.style.backgroundColor = '#fffde7';
+            content.style.border = '2px solid #fbc02d';
+            const title = document.createElement('h3');
+            title.textContent = '🛡️ ページ内検索 (Ctrl+F) について';
+            title.style.color = '#f57f17';
+            const message = document.createElement('p');
+            message.innerHTML = 'このゲームではページ内検索(Ctrl+F または Cmd+F)は<strong>禁止</strong>されています。<br>使用が検出された場合、ペナルティとして脱落となりますのでご注意ください。';
+            message.style.marginBottom = '20px';
+            message.style.lineHeight = '1.6';
+            const buttonDiv = document.createElement('div');
+            buttonDiv.style.textAlign = 'center';
+            const okButton = document.createElement('button');
+            okButton.className = 'btn';
+            okButton.textContent = 'ルールを理解しました';
+            okButton.style.backgroundColor = '#fbc02d';
+            okButton.style.color = '#333';
+            okButton.onclick = function () { dialog.remove(); };
+            buttonDiv.appendChild(okButton);
+            content.appendChild(title);
+            content.appendChild(message);
+            content.appendChild(buttonDiv);
+            dialog.appendChild(content);
+            document.body.appendChild(dialog);
+        }
+
+        function initSocketConnection() {
+            socket = io();
+
+            socket.on('connect', () => console.log('Socket connected'));
+            socket.on('connection_response', data => { playerId = data.player_id; console.log('Connected as', playerId); });
+
+            socket.on('room_created', data => {
+                roomId = data.room_id;
+                isHost = true;
+                currentRoomPlayerInfos = data.room_info.player_info || {};
+                switchScreen(lobbyScreen, roomScreen);
+                updateRoomInfo(data.room_info);
+            });
+
+            socket.on('player_joined', data => {
+                if (data.player_id === playerId && data.room_info && data.room_info.id) {
+                    roomId = data.room_info.id;
+                    switchScreen(lobbyScreen, roomScreen);
+                }
+                if (data.room_info && data.room_info.id === roomId) {
+                    currentRoomPlayerInfos = data.room_info.player_info || {};
+                    updateRoomInfo(data.room_info);
+                }
+            });
+
+            socket.on('player_ready_changed', data => {
+                if (data.room_info && data.room_info.id === roomId) {
+                    currentRoomPlayerInfos = data.room_info.player_info || {};
+                    updateRoomInfo(data.room_info);
+                }
+            });
+
+            socket.on('all_players_ready', data => {
+                if (isHost) document.getElementById('start-game-btn').disabled = false;
+            });
+
+            socket.on('target_url_updated', data => {
+                if (data.room_id === roomId) {
+                    currentRoomPlayerInfos = data.room_info.player_info || {};
+                    updateRoomInfo(data.room_info);
+                    if (data.room_info && data.room_info.target_url) {
+                        document.getElementById('current-room-target-url').textContent = decodeURIComponent(data.room_info.target_url).split('/').pop() || '未設定';
+                    }
+                    if (data.room_info && data.room_info.settings) {
+                        roomSettings = data.room_info.settings;
+                        updateCtrlFCheckbox(roomSettings.allow_ctrl_f);
+                    }
+                }
+            });
+
+            socket.on('room_settings_updated', data => {
+                if (data.room_id === roomId) {
+                    roomSettings = data.settings;
+                    currentRoomPlayerInfos = data.room_info.player_info || {};
+                    updateRoomInfo(data.room_info);
+                }
+            });
+
+            socket.on('game_started', data => {
+                if (data.room_settings) roomSettings = data.room_settings;
+                currentRoomPlayerInfos = (data.room_info && data.room_info.player_info) ||
+                    (data.game_state && data.game_state.player_states
+                        ? Object.fromEntries(Object.entries(data.game_state.player_states).map(([pid, state]) => [pid, { username: state.username, id: pid }]))
+                        : {});
+
+                // ★ 2. latestGameState の更新
+                if (data.game_state) latestGameState = data.game_state;
+
+                startGame(data);
+
+                const gameHeaderStats = document.querySelector('.game-header .game-stats');
+                let ctrlFStatusDiv = document.getElementById('ctrl-f-status');
+                if (!ctrlFStatusDiv && gameHeaderStats) {
+                    ctrlFStatusDiv = document.createElement('div');
+                    ctrlFStatusDiv.id = 'ctrl-f-status';
+                    ctrlFStatusDiv.className = 'game-stat';
+                    if (!roomSettings.allow_ctrl_f) {
+                        ctrlFStatusDiv.style.color = '#f44336';
+                        ctrlFStatusDiv.style.fontWeight = 'bold';
+                    }
+                    gameHeaderStats.appendChild(ctrlFStatusDiv);
+                }
+                if (ctrlFStatusDiv) {
+                    ctrlFStatusDiv.textContent = `ページ内検索: ${roomSettings.allow_ctrl_f ? '許可' : '禁止'}`;
+                }
+
+                if (!roomSettings.allow_ctrl_f) showCtrlFWarningDialogOnGameStart();
+                ctrlFWarningShown = false;
+            });
+
+            socket.on('player_eliminated', data => {
+                // ★ 2. latestGameState の更新
+                if (data.game_state) {
+                    latestGameState = data.game_state;
+                    updateAllPlayersProgress(data.game_state);
+                }
+
+                const eliminatedPlayerInfo = currentRoomPlayerInfos[data.player_id];
+                const playerName = eliminatedPlayerInfo ? eliminatedPlayerInfo.username : `プレイヤー (${data.player_id.substring(0, 4)}...)`;
+
+                if (data.player_id === playerId) {
+                    showCtrlFViolationDialog();
+                    if (iframeOverlay) iframeOverlay.style.display = 'block'; // 改善点: 脱落者は操作不能に
+                    
+                    // ギブアップボタンを非表示
+                    const giveUpBtn = document.getElementById('give-up-btn');
+                    if (giveUpBtn) giveUpBtn.style.display = 'none';
+                } else {
+                    showEliminationToast(playerName);
+                }
+                console.log('Player eliminated:', data.player_id, data.elimination_reason);
+            });
+
+            socket.on('player_moved', data => {
+                if (data.player_id === playerId) {
+                    moveCount = data.moves;
+                    currentPage = data.url;
+                    gamePath.push(data.url);
+                    updateStats();
+                }
+                // ★ 2. latestGameState の更新
+                if (data.game_state) {
+                    latestGameState = data.game_state;
+                    updateAllPlayersProgress(data.game_state);
+                }
+            });
+
+            socket.on('player_finished', data => {
+                // ★ 2. latestGameState の更新
+                if (data.game_state) latestGameState = data.game_state;
+                playerFinished(data);
+            });
+
+            socket.on('game_finished', data => {
+                if (timerInterval) clearInterval(timerInterval);
+                latestGameState = null; // ゲーム終了時はリセット
+                showResults(data);
+                hideGoalNotification();
+                if (iframeOverlay) iframeOverlay.style.display = 'none';
+                
+                // ギブアップボタンを非表示
+                const giveUpBtn = document.getElementById('give-up-btn');
+                if (giveUpBtn) giveUpBtn.style.display = 'none';
+            });
+
+            socket.on('player_left', data => {
+                if (data.room_info && data.room_info.id === roomId) {
+                    currentRoomPlayerInfos = data.room_info.player_info || {};
+                    updateRoomInfo(data.room_info);
+                }
+                // ゲーム中に誰かが抜けた場合、最新のゲーム状態も更新されるべき (サーバー側で送信されていれば)
+                if (data.game_state) latestGameState = data.game_state;
+                
+                // ゲーム中にプレーヤーが離脱した場合の処理
+                if (data.during_game && !gameScreen.classList.contains('hidden')) {
+                    const leftPlayerInfo = currentRoomPlayerInfos[data.player_id] || {};
+                    const playerName = leftPlayerInfo.username || `プレイヤー (${data.player_id.substring(0, 4)}...)`;
+                    showPlayerLeftToast(playerName);
+                    
+                    // ゲーム状態を更新
+                    if (data.game_state) {
+                        latestGameState = data.game_state;
+                        updateAllPlayersProgress(data.game_state);
+                    }
+                }
+            });
+
+            socket.on('player_gave_up', data => {
+                // ★ 2. latestGameState の更新
+                if (data.game_state) {
+                    latestGameState = data.game_state;
+                    updateAllPlayersProgress(data.game_state);
+                }
+
+                const gaveUpPlayerInfo = currentRoomPlayerInfos[data.player_id];
+                const playerName = gaveUpPlayerInfo ? gaveUpPlayerInfo.username : `プレイヤー (${data.player_id.substring(0, 4)}...)`;
+
+                if (data.player_id === playerId) {
+                    // 自分がギブアップした場合の処理は handleGiveUp() で既に実行済み
+                } else {
+                    showPlayerGaveUpToast(playerName);
+                }
+                console.log('Player gave up:', data.player_id);
+            });
+
+            // プレーヤー不足によるゲーム強制終了は削除（ゲームは継続）
+
+            socket.on('left_room', () => {
+                switchScreen(roomScreen, lobbyScreen);
+                roomId = null;
+                isHost = false;
+                currentRoomPlayerInfos = {};
+                latestGameState = null; // ロビーに戻ったらリセット
+                loadAvailableRooms();
+            });
+
+            socket.on('available_rooms', data => displayAvailableRooms(data.rooms));
+
+            socket.on('room_reset', data => {
+                if (data.room_id === roomId) {
+                    if (!gameScreen.classList.contains('hidden')) switchScreen(gameScreen, roomScreen);
+                    if (!resultsModal.classList.contains('hidden')) resultsModal.classList.add('hidden');
+
+                    currentRoomPlayerInfos = data.room_info.player_info || {};
+                    latestGameState = null; // ルームリセット時も
+                    updateRoomInfo(data.room_info);
+                    hideGoalNotification();
+                    if (iframeOverlay) iframeOverlay.style.display = 'none';
+
+                    const toast = document.createElement('div');
+                    toast.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); background-color:#e8f5e9; color:#2e7d32; padding:10px 20px; border-radius:5px; box-shadow:0 2px 4px rgba(0,0,0,0.2); font-weight:bold; z-index:9999;';
+                    toast.innerHTML = '🔄 ルームがリセットされました。新しいゲームの準備をしてください。';
+                    document.body.appendChild(toast);
+                    setTimeout(() => {
+                        toast.style.opacity = '0';
+                        toast.style.transition = 'opacity 0.5s ease';
+                        setTimeout(() => toast.remove(), 500);
+                    }, 3000);
+                }
+            });
+            socket.on('error', data => alert(data.message));
+
+            // ページ名当てモード用
+            socket.on('answer_result', data => {
+                guessCount = data.guess_count;
+                updateStats();
+                // ★ 2. latestGameState の更新 (サーバーが game_state を送ってくれば)
+                if (data.game_state) latestGameState = data.game_state;
+
+                if (data.is_correct) {
+                    showCorrectAnswerDialog(data.correct_title);
+                    if (data.next_page_url) {
+                        navigateToPage(data.next_page_url, true);
+                    }
+                } else {
+                    showWrongAnswerDialog();
+                }
+            });
+            socket.on('player_answered_correctly', data => {
+                const answeredPlayerInfo = currentRoomPlayerInfos[data.player_id];
+                const playerName = answeredPlayerInfo ? answeredPlayerInfo.username : `プレイヤー (${data.player_id.substring(0, 4)}...)`;
+                if (data.player_id !== playerId) showPlayerAnsweredToast(playerName);
+                // ★ 2. latestGameState の更新
+                if (data.game_state) {
+                    latestGameState = data.game_state;
+                    updateAllPlayersProgress(data.game_state);
+                }
+            });
+        }
+
+        function loadAvailableRooms() { socket.emit('get_available_rooms'); }
+
+        function displayAvailableRooms(roomsData) {
+            const roomsList = document.getElementById('rooms-list');
+            roomsList.innerHTML = '';
+            if (roomsData.length === 0) {
+                roomsList.innerHTML = '<p>利用可能なルームがありません</p>';
+                return;
+            }
+            roomsData.forEach((room, index) => {
+                const roomCard = document.createElement('div');
+                roomCard.className = 'room-card';
+                roomCard.style.animationDelay = `${index * 0.1}s`;
+                const h3 = document.createElement('h3');
+                h3.textContent = room.name;
+                const roomMetaDiv = document.createElement('div');
+                roomMetaDiv.className = 'room-meta';
+                const statusBadge = document.createElement('span');
+                statusBadge.className = `status-badge ${room.status === 'waiting' ? 'waiting' : 'playing'}`;
+                statusBadge.textContent = room.status === 'waiting' ? '待機中' : 'ゲーム中';
+                const playersDiv = document.createElement('div');
+                playersDiv.className = 'players';
+                playersDiv.textContent = `${room.player_count} / ${room.max_players}人`;
+                roomMetaDiv.appendChild(statusBadge);
+                roomMetaDiv.appendChild(playersDiv);
+                roomCard.appendChild(h3);
+                roomCard.appendChild(roomMetaDiv);
+                roomCard.addEventListener('click', () => socket.emit('join_room', { room_id: room.id, username: username }));
+                roomsList.appendChild(roomCard);
+            });
+        }
+
+        function updateRoomInfo(roomInfo) {
+            if (!roomInfo || !roomInfo.name) { console.warn('updateRoomInfo: roomInfo is invalid', roomInfo); return; }
+            document.getElementById('room-name').textContent = roomInfo.name;
+            const playersListElement = document.getElementById('players-list');
+            playersListElement.innerHTML = '';
+            if (roomInfo.player_info && roomInfo.players) {
+                roomInfo.players.forEach(pId => {
+                    const playerDetail = roomInfo.player_info[pId];
+                    if (playerDetail) {
+                        const isHostPlayer = pId === roomInfo.host;
+                        const playerItem = document.createElement('div');
+                        playerItem.className = 'player-item';
+                        const usernameDiv = document.createElement('div');
+                        usernameDiv.className = 'username';
+                        usernameDiv.textContent = `${playerDetail.username} ${pId === playerId ? '(あなた)' : ''}`;
+                        const statusDiv = document.createElement('div');
+                        statusDiv.className = `status ${playerDetail.ready ? 'ready' : (isHostPlayer ? 'host' : 'not-ready')}`;
+                        statusDiv.textContent = isHostPlayer ? 'ホスト' : (playerDetail.ready ? '準備完了' : '準備中');
+                        playerItem.appendChild(usernameDiv);
+                        playerItem.appendChild(statusDiv);
+                        playersListElement.appendChild(playerItem);
+                    }
+                });
+            }
+
+            const startGameBtn = document.getElementById('start-game-btn');
+            const toggleReadyBtn = document.getElementById('toggle-ready-btn');
+            if (playerId === roomInfo.host) {
+                isHost = true;
+                startGameBtn.style.display = 'inline-block';
+                toggleReadyBtn.style.display = 'none';
+                const otherPlayerIds = roomInfo.players.filter(pId => pId !== playerId);
+                const allOtherPlayersReady = otherPlayerIds.length > 0 && otherPlayerIds.every(pIdVal => roomInfo.player_info[pIdVal] && roomInfo.player_info[pIdVal].ready);
+                startGameBtn.disabled = !(allOtherPlayersReady && roomInfo.players.length >= 1); // ホストのみでも開始可能にする場合 >=1
+            } else {
+                isHost = false;
+                startGameBtn.style.display = 'none';
+                toggleReadyBtn.style.display = 'inline-block';
+            }
+
+            document.getElementById('room-status').textContent = `ステータス: ${roomInfo.status === 'waiting' ? '待機中' : 'ゲーム中'} - プレイヤー: ${roomInfo.players.length}/${roomInfo.max_players}`;
+            document.getElementById('current-room-target-url').textContent = decodeURIComponent(roomInfo.target_url || 'https://ja.wikipedia.org/wiki/日本').split('/').pop() || '未設定';
+
+            const targetUrlSettingDiv = document.getElementById('target-url-setting');
+            const ctrlFCheckbox = document.getElementById('allow-ctrl-f-checkbox');
+            const gameModeSelect = document.getElementById('game-mode-select');
+            const difficultySelect = document.getElementById('difficulty-select');
+            const difficultySelection = document.getElementById('difficulty-selection-multiplayer');
+            const targetUrlSection = document.getElementById('target-url-input-section');
+
+            if (isHost) {
+                targetUrlSettingDiv.classList.remove('hidden');
+                document.getElementById('room-target-url-input').value = roomInfo.target_url || '';
+                document.getElementById('room-target-search-input').value = roomInfo.target_url ? decodeURIComponent(roomInfo.target_url).split('/').pop().replace(/_/g, ' ') : '';
+                ctrlFCheckbox.disabled = false;
+                ctrlFCheckbox.checked = roomInfo.settings ? roomInfo.settings.allow_ctrl_f : true;
+                gameModeSelect.disabled = false;
+                difficultySelect.disabled = false;
+                gameModeSelect.value = roomInfo.settings ? roomInfo.settings.game_mode || 'navigation' : 'navigation';
+                difficultySelect.value = roomInfo.settings ? roomInfo.settings.difficulty || 'easy' : 'easy';
+                if (gameModeSelect.value === 'guessing') {
+                    difficultySelection.classList.remove('hidden');
+                    targetUrlSection.classList.add('hidden');
+                } else {
+                    difficultySelection.classList.add('hidden');
+                    targetUrlSection.classList.remove('hidden');
+                }
+            } else {
+                targetUrlSettingDiv.classList.add('hidden');
+                ctrlFCheckbox.disabled = true;
+                gameModeSelect.disabled = true;
+                difficultySelect.disabled = true;
+                if (roomInfo.settings) {
+                    ctrlFCheckbox.checked = roomInfo.settings.allow_ctrl_f;
+                    gameModeSelect.value = roomInfo.settings.game_mode || 'navigation';
+                    difficultySelect.value = roomInfo.settings.difficulty || 'easy';
+                    if (gameModeSelect.value === 'guessing') {
+                        difficultySelection.classList.remove('hidden');
+                        targetUrlSection.classList.add('hidden');
+                    } else {
+                        difficultySelection.classList.add('hidden');
+                        targetUrlSection.classList.remove('hidden');
+                    }
+                } else {
+                    ctrlFCheckbox.checked = true;
+                    gameModeSelect.value = 'navigation';
+                    difficultySelect.value = 'easy';
+                    difficultySelection.classList.add('hidden');
+                    targetUrlSection.classList.remove('hidden');
+                }
+            }
+            currentRoomPlayerInfos = roomInfo.player_info || {};
+        }
+
+        function updateCtrlFCheckbox(isAllowed) {
+            const ctrlFCheckbox = document.getElementById('allow-ctrl-f-checkbox');
+            if (ctrlFCheckbox) {
+                ctrlFCheckbox.checked = isAllowed;
+                if (!isHost) ctrlFCheckbox.disabled = true;
+            }
+        }
+
+        let searchTimeout;
+        function searchWikipedia(query) {
+            fetch(`/api/search-wikipedia?query=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => displaySuggestions(data.suggestions || []))
+                .catch(error => { console.error('検索エラー:', error); document.getElementById('search-suggestions').classList.add('hidden'); });
+        }
+        function displaySuggestions(suggestions) {
+            const suggestionsDiv = document.getElementById('search-suggestions');
+            suggestionsDiv.innerHTML = '';
+            if (suggestions.length === 0) { suggestionsDiv.classList.add('hidden'); return; }
+            suggestions.forEach(suggestion => {
+                const item = document.createElement('div');
+                item.className = 'suggestion-item';
+                const title = document.createElement('div');
+                title.className = 'suggestion-title';
+                title.textContent = suggestion.title;
+                const urlDiv = document.createElement('div');
+                urlDiv.className = 'suggestion-url';
+                try { urlDiv.textContent = decodeURIComponent(suggestion.url); } catch (e) { urlDiv.textContent = suggestion.url; }
+                item.appendChild(title); item.appendChild(urlDiv);
+                item.addEventListener('click', () => selectSuggestion(suggestion));
+                suggestionsDiv.appendChild(item);
+            });
+            suggestionsDiv.classList.remove('hidden');
+        }
+        function selectSuggestion(suggestion) {
+            document.getElementById('room-target-search-input').value = suggestion.title;
+            document.getElementById('room-target-url-input').value = suggestion.url;
+            document.getElementById('search-suggestions').classList.add('hidden');
+            if (roomId && isHost) {
+                socket.emit('set_target_url', { room_id: roomId, target_url: suggestion.url });
+            }
+        }
+
+        function startGame(data) {
+            switchScreen(roomScreen, gameScreen);
+            hideGoalNotification();
+            if (iframeOverlay) iframeOverlay.style.display = 'none';
+
+            startUrl = data.start_url;
+            targetUrl = data.target_url;
+            currentPage = startUrl;
+            moveCount = 0;
+            gamePath = [startUrl];
+
+            gameStartTime = Date.now();
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 1000);
+
+            // ★ 4. startGame で latestGameState を初期化 (socket.on('game_started')内でも良いが念のため)
+            if (data.game_state) latestGameState = data.game_state;
+
+            document.getElementById('target-page-name').textContent = decodeURIComponent(targetUrl).split('/').pop();
+
+            const gameMode = roomSettings.game_mode;
+            const gameModeDisplay = document.getElementById('game-mode-display');
+            const navigationTargetSpan = document.getElementById('navigation-target');
+            const guessingTargetSpan = document.getElementById('guessing-target');
+            const answerFormDiv = document.getElementById('answer-form');
+            const gameMovesDiv = document.getElementById('game-moves');
+            const gameGuessCountDiv = document.getElementById('game-guess-count');
+
+            if (gameMode === 'navigation') {
+                gameModeDisplay.textContent = 'モード: ナビゲーション';
+                navigationTargetSpan.classList.remove('hidden');
+                guessingTargetSpan.classList.add('hidden');
+                answerFormDiv.classList.add('hidden');
+                gameMovesDiv.classList.remove('hidden');
+                gameGuessCountDiv.classList.add('hidden');
+            } else if (gameMode === 'guessing') {
+                gameModeDisplay.textContent = 'モード: ページ名当て';
+                navigationTargetSpan.classList.add('hidden');
+                guessingTargetSpan.classList.remove('hidden');
+                answerFormDiv.classList.remove('hidden');
+                gameMovesDiv.classList.add('hidden');
+                gameGuessCountDiv.classList.remove('hidden');
+                guessCount = 0;
+            }
+
+            updateStats();
+
+            let frameUrl = `/proxy?url=${encodeURIComponent(startUrl)}`;
+            if (gameMode === 'guessing') {
+                frameUrl += `&mode=guessing&room_id=${roomId}`;
+            }
+            document.getElementById('game-frame').src = frameUrl;
+
+            // ギブアップボタンを表示
+            const giveUpBtn = document.getElementById('give-up-btn');
+            if (giveUpBtn) giveUpBtn.style.display = 'inline-block';
+
+            if (data.game_state) updateAllPlayersProgress(data.game_state);
+        }
+
+        // ★ 3. updateTimer 関数の修正
+        function updateTimer() {
+            if (!gameStartTime || gameScreen.classList.contains('hidden')) { // ゲーム画面でない場合はタイマー更新をスキップ
+                if (timerInterval) clearInterval(timerInterval); // 安全のためクリア
+                return;
+            }
+            const elapsedMs = Date.now() - gameStartTime;
+            const elapsedSec = Math.floor(elapsedMs / 1000);
+            const minutes = Math.floor(elapsedSec / 60);
+            const seconds = elapsedSec % 60;
+            document.getElementById('current-time').textContent = `経過時間: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            // プレイヤー進捗リストのタイマーも更新
+            if (latestGameState && !gameScreen.classList.contains('hidden')) { // ゲーム画面表示中のみ更新
+                updateAllPlayersProgress(latestGameState);
+            }
+        }
+
+
+        function updateStats() {
+            if (roomSettings.game_mode === 'navigation') {
+                document.getElementById('game-moves').textContent = `移動回数: ${moveCount}`;
+            } else if (roomSettings.game_mode === 'guessing') {
+                document.getElementById('game-guess-count').textContent = `推測回数: ${guessCount}`;
+            }
+        }
+
+        function updateAllPlayersProgress(gameState) {
+            const progressList = document.getElementById('player-progress-list');
+            if (!progressList) return; // 要素が存在しない場合は何もしない
+            progressList.innerHTML = '';
+            if (!gameState || !gameState.player_states) {
+                progressList.innerHTML = '<div style="padding: 15px; color: #777;">プレイヤーデータを読み込み中...</div>';
+                return;
+            }
+
+            Object.entries(gameState.player_states).forEach(([pid, state], index) => {
+                const playerCard = document.createElement('div');
+                let cardClasses = 'player-card';
+                if (state.finished) cardClasses += ' finished';
+                if (pid === playerId) cardClasses += ' current-player';
+                if (state.eliminated) cardClasses += ' eliminated';
+                if (state.gave_up) cardClasses += ' eliminated'; // ギブアップも脱落と同じスタイル
+                playerCard.className = cardClasses;
+                // animationDelay は初回描画時のみ有効にしたいが、ここでは簡略化
+                // playerCard.style.animationDelay = `${index * 0.1}s`; 
+
+                const playerInfoDetail = currentRoomPlayerInfos[pid];
+                const rawPlayerName = playerInfoDetail ? playerInfoDetail.username : (state.username || `プレイヤー${pid.substr(0, 4)}`);
+
+                const playerNameDiv = document.createElement('div');
+                playerNameDiv.className = 'player-name';
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = rawPlayerName;
+                playerNameDiv.appendChild(nameSpan);
+                const statusTextSpan = document.createElement('span');
+                statusTextSpan.className = 'status-text';
+                let statusTextContent = pid === playerId ? ' (あなた)' : '';
+                if (state.gave_up) statusTextContent += ' (ギブアップ)';
+                else if (state.eliminated) statusTextContent += ' (脱落)';
+                else if (state.finished) statusTextContent += ' (ゴール)';
+                statusTextSpan.textContent = statusTextContent.trim();
+                if (statusTextSpan.textContent) { playerNameDiv.appendChild(document.createTextNode(' ')); playerNameDiv.appendChild(statusTextSpan); }
+                playerCard.appendChild(playerNameDiv);
+
+                const playerMovesDiv = document.createElement('div');
+                playerMovesDiv.className = 'player-info-item';
+                const movesLabel = document.createElement('strong');
+                movesLabel.textContent = roomSettings.game_mode === 'guessing' ? '正解数: ' : '移動回数: ';
+                playerMovesDiv.appendChild(movesLabel);
+                playerMovesDiv.appendChild(document.createTextNode(state.moves));
+                playerCard.appendChild(playerMovesDiv);
+
+                const playerTimeDiv = document.createElement('div');
+                playerTimeDiv.className = 'player-info-item';
+                const timeLabel = document.createElement('strong');
+                timeLabel.textContent = '時間: ';
+                playerTimeDiv.appendChild(timeLabel);
+                let elapsedTime = '00:00';
+                if (gameState.started_at) {
+                    const startTime = gameState.started_at * 1000; // Unix timestamp (seconds to ms)
+                    // state.finish_time も秒単位の Unix timestamp と仮定
+                    const endTime = (state.finished && state.finish_time) ? state.finish_time * 1000 : Date.now();
+                    const elapsedMs = endTime - startTime;
+                    const elapsedSec = Math.floor(elapsedMs / 1000);
+                    const minutes = Math.floor(elapsedSec / 60);
+                    const seconds = elapsedSec % 60;
+                    elapsedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                }
+                playerTimeDiv.appendChild(document.createTextNode(elapsedTime));
+                playerCard.appendChild(playerTimeDiv);
+                progressList.appendChild(playerCard);
+            });
+        }
+
+        function playerFinished(data) {
+            if (data.game_state) updateAllPlayersProgress(data.game_state); // これは最新の状態で更新
+
+            const finishedPlayerInfo = currentRoomPlayerInfos[data.player_id];
+            const playerName = finishedPlayerInfo ? finishedPlayerInfo.username : `プレイヤー (${data.player_id.substring(0, 4)}...)`;
+
+            if (data.player_id === playerId) {
+                showGoalNotification(`🎉 目標達成！ 🎉`, `あなたは ${data.rank} 位です。他のプレイヤーの終了を待っています...`);
+                if (iframeOverlay) iframeOverlay.style.display = 'block';
+                
+                // ギブアップボタンを非表示
+                const giveUpBtn = document.getElementById('give-up-btn');
+                if (giveUpBtn) giveUpBtn.style.display = 'none';
+            } else {
+                showPlayerGoalToast(playerName, data.rank);
+            }
+        }
+
+        function showGoalNotification(mainMessage, subMessage = "") {
+            if (goalNotification) {
+                document.getElementById('goal-notification-main-text').textContent = mainMessage;
+                document.getElementById('goal-notification-sub-text').textContent = subMessage;
+                goalNotification.style.display = 'block';
+            }
+        }
+        function hideGoalNotification() {
+            if (goalNotification) goalNotification.style.display = 'none';
+        }
+
+        function showPlayerGoalToast(playerName, rank) {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background-color:#e8f5e9; color:#2e7d32; padding:12px 20px; border-radius:5px; box-shadow:0 4px 8px rgba(0,0,0,0.2); z-index:9999; max-width:300px; font-weight:bold; border:1px solid #a5d6a7; display:flex; align-items:center; animation:fadeIn 0.5s, fadeOut 0.5s 5s; animation-fill-mode:forwards;';
+            const icon = document.createElement('span');
+            icon.innerHTML = '🏆';
+            icon.style.marginRight = '10px';
+            icon.style.fontSize = '20px';
+            const message = document.createElement('span');
+            message.textContent = `${playerName} が ${rank} 位でゴールしました！`;
+            toast.appendChild(icon);
+            toast.appendChild(message);
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5500);
+        }
+
+        function showResults(data) {
+            if (timerInterval) clearInterval(timerInterval);
+            latestGameState = null; // 結果表示時は不要
+            const resultsTableBody = document.getElementById('results-table-body');
+            resultsTableBody.innerHTML = '';
+
+            data.results.forEach(result => {
+                const row = document.createElement('tr');
+                if (result.rank === 1) row.classList.add('rank-1');
+                else if (result.rank === 2) row.classList.add('rank-2');
+                else if (result.rank === 3) row.classList.add('rank-3');
+
+                const timeTaken = result.time_taken ? formatTime(result.time_taken) : '-';
+                const rankTd = document.createElement('td');
+                rankTd.className = 'rank'; rankTd.textContent = result.rank;
+                const playerTd = document.createElement('td');
+                let statusText = result.player_id === playerId ? '(あなた)' : '';
+                if (result.gave_up) statusText += ' (ギブアップ)';
+                else if (result.eliminated) statusText += ' (脱落)';
+                playerTd.textContent = `${result.username} ${statusText}`;
+                if (result.eliminated || result.gave_up) row.style.backgroundColor = '#ffebee';
+                const movesTd = document.createElement('td');
+                movesTd.textContent = `${result.moves}回`;
+                const timeTd = document.createElement('td');
+                timeTd.textContent = timeTaken;
+                const pathTd = document.createElement('td');
+                const pathButton = document.createElement('button');
+                pathButton.className = 'view-path-btn btn'; pathButton.style.padding = '5px 10px'; pathButton.style.fontSize = '0.8em';
+                pathButton.textContent = 'ルート表示'; pathButton.dataset.path = JSON.stringify(result.path);
+                pathTd.appendChild(pathButton);
+                row.appendChild(rankTd); row.appendChild(playerTd); row.appendChild(movesTd); row.appendChild(timeTd); row.appendChild(pathTd);
+                resultsTableBody.appendChild(row);
+            });
+
+            const modalContent = resultsModal.querySelector('.modal-content');
+            const oldActionButtonsContainer = modalContent.querySelector('div.action-buttons-container');
+            if (oldActionButtonsContainer) oldActionButtonsContainer.remove();
+
+            const actionButtonsContainer = document.createElement('div');
+            actionButtonsContainer.className = 'action-buttons-container';
+            actionButtonsContainer.style.cssText = 'display:flex; justify-content:center; gap:15px; margin-top:20px;';
+
+            const resetGameBtn = document.createElement('button');
+            resetGameBtn.className = 'btn'; resetGameBtn.style.backgroundColor = '#4CAF50';
+            resetGameBtn.textContent = '新しいゲームを始める'; resetGameBtn.onclick = resetGame;
+
+            const backToLobbyBtnClone = document.createElement('button');
+            backToLobbyBtnClone.id = "back-to-lobby-btn-modal";
+            backToLobbyBtnClone.className = "btn";
+            backToLobbyBtnClone.textContent = "ロビーに戻る";
+            backToLobbyBtnClone.onclick = function () {
+                const rModalContent = resultsModal.querySelector('.modal-content');
+                rModalContent.classList.remove('fade-in'); rModalContent.classList.add('fade-out');
+                setTimeout(() => {
+                    resultsModal.classList.add('hidden'); rModalContent.classList.remove('fade-out');
+                    switchScreen(gameScreen, lobbyScreen);
+                    socket.emit('leave_room_request');
+                    loadAvailableRooms();
+                }, parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--transition-speed')) * 1000 || 500);
+            };
+            actionButtonsContainer.appendChild(resetGameBtn);
+            actionButtonsContainer.appendChild(backToLobbyBtnClone);
+            modalContent.appendChild(actionButtonsContainer);
+
+            document.querySelectorAll('.view-path-btn').forEach(button => {
+                button.addEventListener('click', function () { displayPathInModal(JSON.parse(this.dataset.path)); });
+            });
+
+            createConfetti();
+            resultsModal.classList.remove('hidden');
+            modalContent.classList.add('fade-in');
+        }
+
+        function displayPathInModal(path) {
+            const pathModal = document.createElement('div');
+            pathModal.className = 'modal'; pathModal.style.zIndex = '1001';
+            const pathContent = document.createElement('div');
+            pathContent.className = 'modal-content'; pathContent.style.textAlign = 'left';
+            const h2 = document.createElement('h2');
+            h2.textContent = 'たどったルート';
+            const ol = document.createElement('ol');
+            ol.style.paddingLeft = '20px';
+            path.forEach(url => {
+                const li = document.createElement('li');
+                const a = document.createElement('a');
+                a.href = url; a.target = '_blank';
+                a.textContent = decodeURIComponent(url).split('/').pop();
+                li.appendChild(a); ol.appendChild(li);
+            });
+            const closeButton = document.createElement('button');
+            closeButton.className = 'btn'; closeButton.textContent = '閉じる';
+            closeButton.style.marginTop = '20px'; closeButton.onclick = () => pathModal.remove();
+            pathContent.appendChild(h2); pathContent.appendChild(ol); pathContent.appendChild(closeButton);
+            pathModal.appendChild(pathContent); document.body.appendChild(pathModal);
+        }
+
+        function createConfetti() {
+            const confettiCount = 100;
+            const colors = ['#6e8efb', '#a777e3', '#ffcc00', '#ff7675', '#55efc4', '#00cec9'];
+            const modalContent = document.querySelector('#results-modal .modal-content');
+            if (!modalContent) { console.error('Modal content for confetti not found'); return; }
+            const existingConfetti = modalContent.querySelectorAll('.confetti');
+            existingConfetti.forEach(c => c.remove());
+            for (let i = 0; i < confettiCount; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                const size = Math.random() * 8 + 4;
+                confetti.style.width = size + 'px'; confetti.style.height = size * 1.5 + 'px';
+                confetti.style.opacity = Math.random() * 0.6 + 0.4;
+                confetti.style.animation = `confetti-fall ${Math.random() * 2 + 3}s ${Math.random() * 1.5}s ease-in 1 forwards`;
+                modalContent.appendChild(confetti);
+            }
+        }
+
+        function handleFrameLoad() {
+            const frame = document.getElementById('game-frame');
+            try {
+                const frameDoc = frame.contentDocument || frame.contentWindow.document;
+                if (!frameDoc) return;
+
+                Array.from(frameDoc.getElementsByTagName('script')).forEach(script => script.remove());
+
+                if (roomSettings && !roomSettings.allow_ctrl_f && frame.contentWindow) {
+                    frame.contentWindow.addEventListener('keydown', function (e) {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                            e.preventDefault();
+                            if (!ctrlFWarningShown) {
+                                socket.emit('ctrl_f_violation');
+                            }
+                        }
+                    });
+                }
+
+                Array.from(frameDoc.getElementsByTagName('a')).forEach(link => {
+                    link.addEventListener('click', async function (e) {
+                        e.preventDefault();
+                        if (iframeOverlay && iframeOverlay.style.display === 'block') return;
+
+                        const href = this.getAttribute('href');
+                        if (href) {
+                            let fullUrl;
+                            if (href.startsWith('/wiki/')) fullUrl = `https://ja.wikipedia.org${href}`;
+                            else if (href.includes('wikipedia.org')) fullUrl = href;
+                            else return;
+
+                            if (isValidWikipediaArticle(fullUrl)) {
+                                await navigateToPage(fullUrl);
+                            }
+                        }
+                    });
+                });
+
+                const style = frameDoc.createElement('style');
+                style.textContent = `a { cursor: pointer !important; color: blue !important; text-decoration: underline !important; } a:hover { text-decoration: underline !important; color: darkblue !important; }`;
+                frameDoc.head.appendChild(style);
+            } catch (e) {
+                console.warn('フレーム処理エラー (クロスオリジンの可能性):', e);
+            }
+        }
+
+        async function navigateToPage(clickedUrl, isGuessingModeNextPage = false) {
+            if (!(roomSettings.game_mode === 'guessing' && isGuessingModeNextPage)) {
+                socket.emit('player_move', { url: clickedUrl });
+            }
+
+            let frameUrl = `/proxy?url=${encodeURIComponent(clickedUrl)}`;
+            if (roomSettings.game_mode === 'guessing') {
+                frameUrl += `&mode=guessing&room_id=${roomId}`;
+            }
+            document.getElementById('game-frame').src = frameUrl;
+        }
+
+        function isValidWikipediaArticle(url) {
+            try {
+                const urlObj = new URL(url);
+                const path = urlObj.pathname;
+                return path.startsWith('/wiki/') && !path.includes(':') && !path.includes('Special:') &&
+                    !path.includes('Wikipedia:') && !path.includes('File:') && !path.includes('Template:');
+            } catch (e) { return false; }
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            const millis = Math.floor((remainingSeconds - Math.floor(remainingSeconds)) * 1000);
+            return `${String(minutes).padStart(2, '0')}:${String(Math.floor(remainingSeconds)).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+        }
+
+        function switchScreen(currentScreen, nextScreen) {
+            const transitionSpeed = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--transition-speed')) * 1000 || 500;
+            if (currentScreen) {
+                currentScreen.classList.add('fade-out');
+                setTimeout(() => {
+                    currentScreen.classList.add('hidden');
+                    currentScreen.classList.remove('fade-out');
+                    if (nextScreen) {
+                        nextScreen.classList.remove('hidden');
+                        nextScreen.classList.add('fade-in');
+                        setTimeout(() => nextScreen.classList.remove('fade-in'), transitionSpeed);
+                    }
+                }, transitionSpeed);
+            } else if (nextScreen) {
+                nextScreen.classList.remove('hidden');
+                nextScreen.classList.add('fade-in');
+                setTimeout(() => nextScreen.classList.remove('fade-in'), transitionSpeed);
+            }
+        }
+
+        function showEliminationToast(playerName) {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background-color:#ffebee; color:#d32f2f; padding:12px 20px; border-radius:5px; box-shadow:0 4px 8px rgba(0,0,0,0.2); z-index:9999; max-width:300px; font-weight:bold; border:1px solid #ef9a9a; display:flex; align-items:center; animation:fadeIn 0.5s, fadeOut 0.5s 5s; animation-fill-mode:forwards;';
+            const icon = document.createElement('span');
+            icon.innerHTML = '⚠️'; icon.style.marginRight = '10px'; icon.style.fontSize = '20px';
+            const message = document.createElement('span');
+            message.textContent = `${playerName} がCtrl+F使用のため脱落しました`;
+            toast.appendChild(icon); toast.appendChild(message); document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5500);
+        }
+
+        function resetGame() {
+            const rModalContent = resultsModal.querySelector('.modal-content');
+            rModalContent.classList.remove('fade-in'); rModalContent.classList.add('fade-out');
+            setTimeout(() => {
+                resultsModal.classList.add('hidden'); rModalContent.classList.remove('fade-out');
+                socket.emit('reset_room', { room_id: roomId });
+            }, parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--transition-speed')) * 1000 || 500);
+        }
+
+        function submitAnswer() {
+            if (roomSettings.game_mode !== 'guessing') return;
+            const answer = document.getElementById('answer-input').value.trim();
+            if (!answer) return;
+            socket.emit('submit_answer', { room_id: roomId, answer: answer, current_url: currentPage });
+            document.getElementById('answer-input').value = '';
+        }
+
+        function showCorrectAnswerDialog(correctTitle) {
+            const dialog = document.createElement('div');
+            dialog.className = 'modal'; dialog.style.zIndex = '2000';
+            const content = document.createElement('div');
+            content.className = 'modal-content'; content.style.maxWidth = '400px';
+            content.style.backgroundColor = '#e8f5e9'; content.style.border = '2px solid #4caf50';
+            const title = document.createElement('h3');
+            title.textContent = '🎉 正解！'; title.style.color = '#2e7d32';
+            const message = document.createElement('p');
+            message.textContent = `正解は「${correctTitle}」でした！`;
+            message.style.marginBottom = '20px'; message.style.fontSize = '18px';
+            const buttonDiv = document.createElement('div');
+            buttonDiv.style.textAlign = 'center';
+            const okButton = document.createElement('button');
+            okButton.className = 'btn'; okButton.textContent = 'OK';
+            okButton.style.backgroundColor = '#4caf50'; okButton.onclick = () => dialog.remove();
+            buttonDiv.appendChild(okButton); content.appendChild(title); content.appendChild(message); content.appendChild(buttonDiv);
+            dialog.appendChild(content); document.body.appendChild(dialog);
+        }
+
+        function showWrongAnswerDialog() {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); background-color:#ffebee; color:#d32f2f; padding:10px 20px; border-radius:5px; box-shadow:0 2px 4px rgba(0,0,0,0.2); font-weight:bold; z-index:9999;';
+            toast.textContent = '❌ 不正解です。もう一度挑戦してください。';
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0'; toast.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => toast.remove(), 500);
+            }, 2000);
+        }
+
+        function showPlayerAnsweredToast(playerName) {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background-color:#e8f5e9; color:#2e7d32; padding:12px 20px; border-radius:5px; box-shadow:0 4px 8px rgba(0,0,0,0.2); z-index:9999; max-width:300px; font-weight:bold; border:1px solid #a5d6a7; display:flex; align-items:center; animation:fadeIn 0.5s, fadeOut 0.5s 5s; animation-fill-mode:forwards;';
+            const icon = document.createElement('span');
+            icon.innerHTML = '🎯'; icon.style.marginRight = '10px'; icon.style.fontSize = '20px';
+            const message = document.createElement('span');
+            message.textContent = `${playerName} がページ名を当てました！`;
+            toast.appendChild(icon); toast.appendChild(message); document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5500);
+        }
+
+        function showPlayerLeftToast(playerName) {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background-color:#fff3e0; color:#e65100; padding:12px 20px; border-radius:5px; box-shadow:0 4px 8px rgba(0,0,0,0.2); z-index:9999; max-width:300px; font-weight:bold; border:1px solid #ffb74d; display:flex; align-items:center; animation:fadeIn 0.5s, fadeOut 0.5s 5s; animation-fill-mode:forwards;';
+            const icon = document.createElement('span');
+            icon.innerHTML = '🚪'; icon.style.marginRight = '10px'; icon.style.fontSize = '20px';
+            const message = document.createElement('span');
+            message.textContent = `${playerName} がゲームから離脱しました`;
+            toast.appendChild(icon); toast.appendChild(message); document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5500);
+        }
+
+        function showPlayerGaveUpToast(playerName) {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed; bottom:20px; right:20px; background-color:#ffebee; color:#c62828; padding:12px 20px; border-radius:5px; box-shadow:0 4px 8px rgba(0,0,0,0.2); z-index:9999; max-width:300px; font-weight:bold; border:1px solid #ef9a9a; display:flex; align-items:center; animation:fadeIn 0.5s, fadeOut 0.5s 5s; animation-fill-mode:forwards;';
+            const icon = document.createElement('span');
+            icon.innerHTML = '🏳️'; icon.style.marginRight = '10px'; icon.style.fontSize = '20px';
+            const message = document.createElement('span');
+            message.textContent = `${playerName} がギブアップしました`;
+            toast.appendChild(icon); toast.appendChild(message); document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 5500);
+        }
+
+        // ギブアップ確認ダイアログを表示
+        function showGiveUpConfirmDialog() {
+            const dialog = document.createElement('div');
+            dialog.className = 'modal';
+            dialog.style.zIndex = '2000';
+            const content = document.createElement('div');
+            content.className = 'modal-content';
+            content.style.maxWidth = '400px';
+            content.style.backgroundColor = '#fff8e1';
+            content.style.border = '2px solid #ff9800';
+            
+            const title = document.createElement('h3');
+            title.textContent = '⚠️ ギブアップ確認';
+            title.style.color = '#e65100';
+            
+            const message = document.createElement('p');
+            message.textContent = '本当にギブアップしますか？ギブアップすると最下位として扱われ、ゲームから除外されます。';
+            message.style.marginBottom = '20px';
+            message.style.lineHeight = '1.6';
+            
+            const buttonDiv = document.createElement('div');
+            buttonDiv.style.textAlign = 'center';
+            buttonDiv.style.display = 'flex';
+            buttonDiv.style.gap = '10px';
+            buttonDiv.style.justifyContent = 'center';
+            
+            const cancelButton = document.createElement('button');
+            cancelButton.className = 'btn';
+            cancelButton.textContent = 'キャンセル';
+            cancelButton.style.backgroundColor = '#6c757d';
+            cancelButton.onclick = () => dialog.remove();
+            
+            const confirmButton = document.createElement('button');
+            confirmButton.className = 'btn';
+            confirmButton.textContent = 'ギブアップ';
+            confirmButton.style.backgroundColor = '#f44336';
+            confirmButton.onclick = () => {
+                dialog.remove();
+                handleGiveUp();
+            };
+            
+            buttonDiv.appendChild(cancelButton);
+            buttonDiv.appendChild(confirmButton);
+            content.appendChild(title);
+            content.appendChild(message);
+            content.appendChild(buttonDiv);
+            dialog.appendChild(content);
+            document.body.appendChild(dialog);
+        }
+
+        // ギブアップ処理
+        function handleGiveUp() {
+            if (socket && roomId) {
+                socket.emit('player_give_up', { room_id: roomId });
+                // ギブアップ後は操作を無効化
+                if (iframeOverlay) iframeOverlay.style.display = 'block';
+                
+                // ギブアップ通知を表示
+                showGoalNotification('🏳️ ギブアップしました', '他のプレイヤーの終了を待っています...');
+            }
+        }
+    </script>
+</body>
+
+</html>
